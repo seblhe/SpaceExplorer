@@ -1,29 +1,84 @@
-# SPACE EXPLORER
+# 🌌 SpaceExplorer
 
-## lancer le jeu
+**SpaceExplorer** est un moteur d'exploration spatiale procédurale en 3D, développé avec **Vite**, **Three.js**, **TypeScript** et **React**. Il permet de naviguer dans un univers généré dynamiquement, composé de galaxies, étoiles, planètes, lunes et phénomènes cosmiques.
 
-### en direct
+---
 
-Avec Python 3 :
+## 🚀 Fonctionnalités
 
-`python -m http.server 8080`
+- Génération procédurale de galaxies et systèmes stellaires
+- Visualisation 3D immersive avec effets cinématiques
+- Interaction avec les étoiles (zoom, sélection, déplacement)
+- Affichage dynamique des orbites selon la proximité
+- UI minimaliste pour zoom, rotation et informations système
+- Système de LOD (Level of Detail) pour optimiser les performances
+
+---
+
+## 🧬 Technologies utilisées
+
+| Technologie   | Usage principal                           |
+|--------------|--------------------------------------------|
+| Vite         | Bundler rapide pour développement web      |
+| TypeScript   | Typage strict et sécurité du code          |
+| Three.js     | Rendu 3D en WebGL                          |
+| React        | Gestion de l'interface utilisateur         |
+
+---
+
+## 🧑‍🚀 Lancer le projet
+
+### ▶️ Méthode 1 : Serveur local simple
+
+```bash
+python -m http.server 8080
+# ou
+npx http-server -p 8080
+```
+Puis ouvrir http://localhost:8080
+
+### ▶️ Méthode 2 : Vite + npm
+
+```bash
+npm install
+npm run dev
+```
+Puis ouvrir http://localhost:5173
+
+## 🪐 Structure du projet
+
+src/
+├── cosmos/           # Générateurs d'entités spatiales (étoiles, planètes, lunes, etc.)
+├── universe/         # Générateur de galaxies et gestion de l'univers
+├── ui/               # Interface utilisateur
+├── main.ts           # Point d'entrée principal
+├── OrbitControls.ts  # Contrôles de navigation
 
 
-Avec Node.js :
+## 📸 Aperçu visuel
+(Ajoutez ici une capture d’écran ou une animation du rendu 3D)
 
-`npx http-server -p 8080`
+## 🛣️ Roadmap
 
+- [ ] Génération de structures orbitales (stations, ruines…)
+- [ ] Ajout de biomes et climats planétaires
+- [ ] Système de factions et civilisations
+- [ ] Mode cinématique pour exploration automatique
+- [ ] Export vers WebXR pour support VR
 
-Puis ouvre ton navigateur à l’adresse :
+## 🤝 Contribuer
 
-[Localhost](http://localhost:8080/)
+Les contributions sont les bienvenues ! Pour proposer une amélioration :
 
-### via npm
+1. Fork le dépôt
+2. Crée une branche (feature/ma-fonctionnalite)
+3. Commit tes modifications
+4. Ouvre une Pull Request
 
-Avec npm :
+## 📄 Licence
+Ce projet est sous licence MIT. Voir le fichier LICENSE pour plus d'informations.
 
-`npm run dev`
+## ✨ Auteur
 
-Puis ouvre ton navigateur à l’adresse :
+Développé par Sébastien
 
-[Localhost](http://localhost:5173/)

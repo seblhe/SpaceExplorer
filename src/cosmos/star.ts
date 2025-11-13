@@ -74,7 +74,7 @@ export function generateStar(opts: {
     mass,
     luminosity,
     numPlanets: planets.length,
-    radius: size * 10,
+    radius: size * 20,
     size,
     position,
     planets,

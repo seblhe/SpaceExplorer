@@ -2,271 +2,203 @@
 import * as THREE from 'three';
 import type { StarDescriptor } from './types';
 
+interface StarEvent {
+    id: number;
+    type: 'bright' | 'dim' | 'jet' | 'storm';
+    longitude: number;
+    latitude: number;
+    intensity: number;
+    duration: number;
+    age: number;
+}
+
 interface StarVisualizerOptions {
-	flareIntensity?: number;
-	haloIntensity?: number;
-	lodDistance?: number;
-	pointScale?: number; // facteur pour la taille du point lointain
-	showOrbits?: boolean;
+    lodDistance?: number;
+    filamentCount?: number;
 }
 
 export class StarVisualizerCinematic {
-	public mesh: THREE.Object3D;
-	private isCloseLOD = false;
-	private pointMesh!: THREE.Points;
-	private surfaceMesh!: THREE.Mesh;
-	private uniforms!: {
-		time: { value: number };
-		flareIntensity: { value: number };
-		haloIntensity: { value: number };
-		color: { value: THREE.Color };
-		size: { value: number };
-		noiseOffset: { value: number };
-	};
-	private planetMeshes: THREE.Mesh[] = [];
-	private orbitCurves: THREE.Line[] = [];
+    public mesh: THREE.Object3D;
+    private surfaceMesh!: THREE.Mesh;
+    private uniforms!: {
+        time: { value: number };
+        baseColor: { value: THREE.Color };
+        contrastColor: { value: THREE.Color };
+        events: { value: THREE.Vector4[] };
+        numEvents: { value: number };
+    };
 
-	private readonly lodDistance: number;
-	private readonly flareIntensity: number;
-	private readonly haloIntensity: number;
-	private readonly pointScale: number;
-	private readonly showOrbits: boolean;
+    private events: StarEvent[] = [];
+    private eventTimer = 0;
+    private readonly maxEvents = 16;
+    private readonly lodDistance: number;
+    private elapsed = 0;
 
-	// internal smoothing state
-	private currentScale = 1;
+    constructor(public descriptor: StarDescriptor, opts: StarVisualizerOptions = {}) {
+        this.lodDistance = opts.lodDistance ?? 2000;
+        this.mesh = new THREE.Object3D();
+        this.mesh.name = `star-${descriptor.id}`;
+        this.buildSurface();
+    }
 
-	constructor(public descriptor: StarDescriptor, opts: StarVisualizerOptions = {}) {
-		this.lodDistance = opts.lodDistance ?? 2000;
-		this.flareIntensity = opts.flareIntensity ?? 0.12;
-		this.haloIntensity = opts.haloIntensity ?? 0.05;
-		this.pointScale = opts.pointScale ?? 1.0;
-		this.showOrbits = opts.showOrbits ?? true;
+    // --- Construction du soleil ---
+    private buildSurface() {
+        const size = this.descriptor.size ?? 10;
+        const baseColor = new THREE.Color(this.getColor());
+        const contrastColor = this.computeContrastColor(baseColor);
 
-		this.mesh = new THREE.Object3D();
-		this.mesh.name = `star-${descriptor.id}`;
+        this.uniforms = {
+            time: { value: 0 },
+            baseColor: { value: baseColor },
+            contrastColor: { value: contrastColor },
+            events: { value: Array.from({ length: this.maxEvents }, () => new THREE.Vector4(0, 0, 0, 0)) },
+            numEvents: { value: 0 },
+        };
 
-		this.buildPointLOD();
-		this.buildSurfaceLOD();
-		this.buildPlanets();
-	}
+        const geom = new THREE.SphereGeometry(size, 64, 64);
+        const mat = new THREE.ShaderMaterial({
+            uniforms: this.uniforms,
+            vertexShader: this.vertexShader(),
+            fragmentShader: this.fragmentShader(),
+            blending: THREE.AdditiveBlending,
+            transparent: false,
+            depthWrite: true,
+        });
 
-	// --- helper: create a circular point texture from canvas so points don't look like squares
-	private createPointTexture(diameter = 128): THREE.Texture {
-		const size = diameter;
-		const canvas = document.createElement('canvas');
-		canvas.width = size;
-		canvas.height = size;
-		const ctx = canvas.getContext('2d')!;
-		const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-		grad.addColorStop(0, 'rgba(255,255,255,1)');
-		grad.addColorStop(0.2, 'rgba(255,255,255,0.95)');
-		grad.addColorStop(0.45, 'rgba(255,255,255,0.6)');
-		grad.addColorStop(1, 'rgba(255,255,255,0)');
-		ctx.fillStyle = grad;
-		ctx.fillRect(0, 0, size, size);
+        this.surfaceMesh = new THREE.Mesh(geom, mat);
+        this.surfaceMesh.name = 'star-surface';
+        this.mesh.add(this.surfaceMesh);
+    }
 
-		const tex = new THREE.CanvasTexture(canvas);
-		tex.minFilter = THREE.LinearFilter;
-		tex.magFilter = THREE.LinearFilter;
-		tex.needsUpdate = true;
-		return tex;
-	}
+    // --- Génération des couleurs ---
+    private getColor(): string {
+        const spectralMap: Record<string, string> = {
+            O: '#9bb0ff',
+            B: '#aabfff',
+            A: '#cad7ff',
+            F: '#f8f7ff',
+            G: '#fff4ea',
+            K: '#ffd2a1',
+            M: '#ffcc6f',
+        };
+        return spectralMap[this.descriptor.spectralClass ?? 'G'] ?? '#ffffff';
+    }
 
-	private buildPointLOD() {
-		const geom = new THREE.BufferGeometry();
-		geom.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0], 3));
-		const col = new THREE.Color(this.getColor());
-		const colors = new Float32Array([col.r, col.g, col.b]);
-		geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-		const tex = this.createPointTexture(128);
+    private computeContrastColor(base: THREE.Color): THREE.Color {
+        // Contraste automatique pour les effets
+        const luminance = 0.2126 * base.r + 0.7152 * base.g + 0.0722 * base.b;
+        if (luminance > 0.6) {
+            return new THREE.Color(0.1, 0.1, 0.1); // sombre pour étoiles claires
+        } else {
+            return new THREE.Color(1.5, 1.2, 0.9); // clair pour étoiles rouges/jaunes
+        }
+    }
 
-		const mat = new THREE.PointsMaterial({
-			size: (this.descriptor.size ?? 1) * 2.0 * this.pointScale,
-			map: tex,
-			vertexColors: true,
-			sizeAttenuation: true,
-			transparent: true,
-			alphaTest: 0.01,
-			depthWrite: false,
-		});
+    // --- Génération d’un nouvel événement ---
+    private spawnEvent() {
+        if (this.events.length >= this.maxEvents) return;
+        const types: StarEvent['type'][] = ['bright', 'dim', 'jet', 'storm'];
+        const type = types[Math.floor(Math.random() * types.length)];
 
-		this.pointMesh = new THREE.Points(geom, mat);
-		this.pointMesh.name = 'star-point';
-		this.mesh.add(this.pointMesh);
-	}
+        this.events.push({
+            id: Math.random(),
+            type,
+            longitude: Math.random() * Math.PI * 2,
+            latitude: (Math.random() - 0.5) * Math.PI,
+            intensity: 0.5 + Math.random() * 0.8,
+            duration: 2 + Math.random() * 6,
+            age: 0,
+        });
+    }
 
-	private buildSurfaceLOD() {
-		this.uniforms = {
-			time: { value: 0 },
-			flareIntensity: { value: this.flareIntensity },
-			haloIntensity: { value: this.haloIntensity },
-			color: { value: new THREE.Color(this.getColor()) },
-			size: { value: this.descriptor.size ?? 1 },
-			noiseOffset: { value: Math.random() * 1000 }
-		};
+    // --- Mise à jour à chaque frame ---
+    public animate(dt: number) {
+        this.elapsed += dt;
+        this.eventTimer += dt;
 
-		const material = new THREE.ShaderMaterial({
-			uniforms: this.uniforms,
-			vertexShader: this.vertexShader(),
-			fragmentShader: this.fragmentShader(),
-			transparent: false,
-			blending: THREE.AdditiveBlending,
-			depthWrite: true,
-		});
+        // Ajouter un événement toutes les 1.5 à 3 secondes
+        if (this.eventTimer > 1.5 + Math.random() * 1.5) {
+            this.eventTimer = 0;
+            this.spawnEvent();
+        }
 
-		const geom = new THREE.SphereGeometry(Math.max(0.5, this.descriptor.size ?? 1), 64, 32);
-		this.surfaceMesh = new THREE.Mesh(geom, material);
-		this.surfaceMesh.visible = false;
-		this.surfaceMesh.name = 'star-surface';
-		this.mesh.add(this.surfaceMesh);
-	}
+        // Met à jour la durée de vie et enlève les événements expirés
+        this.events.forEach(e => (e.age += dt));
+        this.events = this.events.filter(e => e.age < e.duration);
 
-	private buildPlanets() {
-		if (!this.descriptor.planets || this.descriptor.planets.length === 0) return;
+        // Met à jour les uniforms pour le shader
+        const vecs = this.events.map(e => {
+            const phase = e.age / e.duration;
+            const intensity = e.intensity * (1 - Math.abs(phase - 0.5) * 2); // fade in/out
+            return new THREE.Vector4(e.longitude, e.latitude, intensity, this.mapEventType(e.type));
+        });
 
-		this.descriptor.planets.forEach((planet, i) => {
-			const planetSize = Math.max(0.2, planet.size ?? (planet.radiusKm ? planet.radiusKm / 10000 : 0.5));
-			const geom = new THREE.SphereGeometry(planetSize, 16, 12);
-			const mat = new THREE.MeshStandardMaterial({
-				color: new THREE.Color(planet.color || '#888888'),
-				roughness: 1.0,
-				metalness: 0.05,
-			});
-			const mesh = new THREE.Mesh(geom, mat);
-			mesh.name = `planet-${planet.id || i}`;
+        for (let i = 0; i < this.maxEvents; i++) {
+            this.uniforms.events.value[i] = vecs[i] ?? new THREE.Vector4(0, 0, 0, 0);
+        }
+        this.uniforms.numEvents.value = vecs.length;
+        this.uniforms.time.value = this.elapsed;
+    }
 
-			const phase = planet.orbitPhase ?? Math.random() * Math.PI * 2;
-			const a = planet.distance ?? 50;
-			const e = planet.orbitEccentricity ?? 0;
-			const b = a * (1 - e);
-			mesh.position.set(Math.cos(phase) * a, 0, Math.sin(phase) * b);
-			const inc = planet.orbitInclination ?? 0;
-			mesh.position.applyAxisAngle(new THREE.Vector3(1, 0, 0), THREE.MathUtils.degToRad(inc));
+    private mapEventType(type: StarEvent['type']): number {
+        switch (type) {
+            case 'bright': return 1;
+            case 'dim': return 2;
+            case 'jet': return 3;
+            case 'storm': return 4;
+        }
+    }
 
-			this.mesh.add(mesh);
-			this.planetMeshes.push(mesh);
+    // --- SHADERS ---
 
-			// draw orbit curve if showOrbits enabled
-			if (this.showOrbits) {
-				const orbitLine = this.createOrbitCurve(a, b, inc);
-				orbitLine.name = `orbit-${planet.id || i}`;
-				orbitLine.visible = false; // hidden by default
-				this.mesh.add(orbitLine);
-				this.orbitCurves.push(orbitLine);
-			}
-		});
-	}
+    private vertexShader(): string {
+        return `
+            varying vec3 vNormal;
+            varying vec3 vPos;
+            void main() {
+                vNormal = normalize(normalMatrix * normal);
+                vPos = normalize(position);
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+        `;
+    }
 
-	private getColor(): string {
-		const spectralMap: Record<string, string> = {
-			O: '#9bb0ff', B: '#aabfff', A: '#cad7ff',
-			F: '#f8f7ff', G: '#fff4ea', K: '#ffd2a1', M: '#ffcc6f'
-		};
-		return spectralMap[this.descriptor.spectralClass ?? 'G'] ?? '#ffffff';
-	}
+    private fragmentShader(): string {
+        return `
+            uniform vec3 baseColor;
+            uniform vec3 contrastColor;
+            uniform vec4 events[16];
+            uniform int numEvents;
+            varying vec3 vNormal;
+            varying vec3 vPos;
 
-	private vertexShader(): string { /* same as previous, unchanged */ 
-		return `
-			uniform float time;
-			uniform float size;
-			uniform float noiseOffset;
-			varying vec3 vNormal;
-			varying vec3 vPosition;
+            // Conversion sphérique
+            vec2 sphericalCoords(vec3 n) {
+                float lon = atan(n.z, n.x);
+                float lat = asin(n.y);
+                return vec2(lon, lat);
+            }
 
-			float hash(float n) { return fract(sin(n) * 43758.5453); }
-			float noise(vec3 p) {
-				float n = dot(p, vec3(12.9898,78.233,37.719));
-				return fract(sin(n + noiseOffset) * 43758.5453);
-			}
+            void main() {
+                vec2 coord = sphericalCoords(vNormal);
+                vec3 col = baseColor;
 
-			void main() {
-				vNormal = normal;
-				vPosition = position;
-				float n = noise(normal * 10.0);
-				vec3 newPos = position + normal * n * 0.01 * size;
-				gl_Position = projectionMatrix * modelViewMatrix * vec4(newPos,1.0);
-			}
-		`;
-	}
+                for (int i = 0; i < 16; i++) {
+                    if (i >= numEvents) break;
+                    vec4 ev = events[i];
+                    float dLon = abs(coord.x - ev.x);
+                    float dLat = abs(coord.y - ev.y);
+                    float dist = sqrt(dLon*dLon + dLat*dLat);
+                    float influence = exp(-dist * 25.0) * ev.z;
 
-	private fragmentShader(): string { /* same as previous, unchanged */
-		return `
-			uniform float flareIntensity;
-			uniform float haloIntensity;
-			uniform vec3 color;
-			varying vec3 vNormal;
-			varying vec3 vPosition;
+                    if (ev.w == 1.0) col += contrastColor * influence; // bright
+                    if (ev.w == 2.0) col -= contrastColor * influence; // dim
+                    if (ev.w == 3.0) col += contrastColor * influence * 1.5; // jet
+                    if (ev.w == 4.0) col += vec3(1.0, 0.2, 0.05) * influence; // storm
+                }
 
-			void main() {
-				float ndotl = max(dot(normalize(vNormal), vec3(0.0,0.0,1.0)),0.0);
-				float intensity = pow(ndotl,2.0);
-				float flare = (sin(vPosition.x*1.0 + vPosition.y*0.5)) * flareIntensity * 0.02;
-				float halo = pow(1.0 - length(vNormal.xy),2.0) * haloIntensity;
-				vec3 col = color * (intensity + flare + halo);
-				gl_FragColor = vec4(col,1.0);
-			}
-		`;
-	}
-
-	private createOrbitCurve(a: number, b: number, inclinationDeg: number): THREE.Line {
-		const points: THREE.Vector3[] = [];
-		const step = 0.06;
-		for (let theta = 0; theta < Math.PI * 2 + 1e-6; theta += step) {
-			const x = a * Math.cos(theta);
-			const z = b * Math.sin(theta);
-			points.push(new THREE.Vector3(x, 0, z));
-		}
-		const geometry = new THREE.BufferGeometry().setFromPoints(points);
-		const material = new THREE.LineBasicMaterial({ color: 0x444444, opacity: 0.25, transparent: true });
-		const line = new THREE.LineLoop(geometry, material);
-		line.rotation.x = THREE.MathUtils.degToRad(inclinationDeg);
-		return line;
-	}
-
-	updateEffects(distanceToCamera: number) {
-		const shouldBeClose = distanceToCamera < this.lodDistance;
-		if (shouldBeClose !== this.isCloseLOD) {
-			this.isCloseLOD = shouldBeClose;
-			this.surfaceMesh.visible = shouldBeClose;
-			this.pointMesh.visible = !shouldBeClose;
-
-			// toggle orbit visibility
-			this.orbitCurves.forEach(o => o.visible = shouldBeClose);
-		}
-
-		const targetScale = THREE.MathUtils.clamp(this.lodDistance / (distanceToCamera + 1), 0.9, 1.1);
-		this.currentScale = THREE.MathUtils.lerp(this.currentScale, targetScale, 0.08);
-		const scaleVec = new THREE.Vector3(this.currentScale,this.currentScale,this.currentScale);
-		if (this.surfaceMesh.visible) this.surfaceMesh.scale.copy(scaleVec);
-		if (this.pointMesh.visible) this.pointMesh.scale.copy(scaleVec);
-	}
-
-	animate(elapsedSeconds: number, deltaSeconds?: number) {
-		if (this.isCloseLOD) this.uniforms.time.value = elapsedSeconds;
-
-		this.planetMeshes.forEach((mesh, i) => {
-			const planet = this.descriptor.planets![i];
-
-			const orbitSpeed = planet.orbitSpeed ?? 0.0001;
-			const selfRotationSpeed = planet.selfRotationSpeed ?? Math.max(orbitSpeed * 50,0.002);
-			const tiltDeg = planet.selfTilt ?? 0;
-			const eccentricity = planet.orbitEccentricity ?? 0;
-			const a = planet.distance ?? 50;
-			const b = a * (1 - eccentricity);
-			const phase = planet.orbitPhase ?? 0;
-			const inclinationDeg = planet.orbitInclination ?? 0;
-
-			const angle = phase + elapsedSeconds * orbitSpeed;
-			const x = Math.cos(angle) * a;
-			const z = Math.sin(angle) * b;
-			let pos = new THREE.Vector3(x, 0, z);
-			pos.applyAxisAngle(new THREE.Vector3(1, 0, 0), THREE.MathUtils.degToRad(inclinationDeg));
-			mesh.position.copy(pos);
-
-			const dt = deltaSeconds ?? 1/60;
-			const tiltRad = THREE.MathUtils.degToRad(tiltDeg);
-			const axis = new THREE.Vector3(Math.sin(tiltRad), Math.cos(tiltRad),0).normalize();
-			mesh.rotateOnAxis(axis, selfRotationSpeed * dt);
-		});
-	}
+                gl_FragColor = vec4(col, 1.0);
+            }
+        `;
+    }
 }

@@ -118,13 +118,13 @@ class GalaxyLOD {
       if (distance < this.starDistanceThreshold) {
         let vis = this.starVisualizers.get(index);
         if (!vis) {
-          vis = new StarVisualizerCinematic(star, { flareIntensity: 0.12, haloIntensity: 0.05, lodDistance: 1200 });
+          vis = new StarVisualizerCinematic(star, { lodDistance: 1200 });
           vis.mesh.position.copy(starPos);
           this.starVisualizers.set(index, vis);
           this.group.add(vis.mesh);
         }
         vis.mesh.visible = true;
-        vis.updateEffects(distance);
+        //vis.updateEffects(distance);
         // masquer point lointain
         this.pointCloud.visible = false;
       } else {
