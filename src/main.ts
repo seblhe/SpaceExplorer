@@ -170,7 +170,7 @@ const range = 1;
 })();
 
 // --- Lighting ---
-scene.add(new THREE.AmbientLight(0xffffff, 0.25));
+scene.add(new THREE.AmbientLight(0xffffff, 0.1));
 
 // --- Resize ---
 window.addEventListener('resize', () => {

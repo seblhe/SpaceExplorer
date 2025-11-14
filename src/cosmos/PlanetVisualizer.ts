@@ -65,11 +65,16 @@ export class PlanetVisualizer {
 		const z = point.y;
 
 		// Création de la planète
+		const textureLoader = new THREE.TextureLoader();
+		const texture = textureLoader.load('./textures/rocky_planet.jpg'); // ← chemin vers ton image
 		const geom = new THREE.SphereGeometry(radiusScale, 32, 32);
 		const mat = new THREE.MeshStandardMaterial({
-			color: new THREE.Color(p.color),
-			roughness: 0.8,
-			metalness: 0.05
+			//color: new THREE.Color(p.color),
+			map: texture,
+			roughness: 1,
+			metalness: 0
+			/*roughness: 0.8,
+			metalness: 0.05*/
 		});
 		const mesh = new THREE.Mesh(geom, mat);
 		mesh.position.set(x, 0, z); // pas de y ici
