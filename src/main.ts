@@ -4,6 +4,9 @@ import { OrbitControls } from './OrbitControls';
 import { Universe } from './universe';
 import { StarVisualizerCinematic } from './cosmos/StarVisualizerCinematic';
 import type { GalaxyDescriptor } from './cosmos/types';
+import { generateStar } from './cosmos/star';
+import { SolarSystem } from './cosmos/SolarSystem';
+import { mulberry32 } from './cosmos/prng';
 
 // --- DOM ---
 const container = document.getElementById('app') as HTMLDivElement;
@@ -34,6 +37,8 @@ const originGalaxy = universe.getGalaxyAt({ x: 0, y: 0, z: 0 });
 galNameEl.textContent = originGalaxy.id ?? 'unknown';
 const bg = universe.getBackgroundColorForGalaxy?.(originGalaxy) ?? [8, 10, 18];
 scene.background = new THREE.Color(`rgb(${bg[0]},${bg[1]},${bg[2]})`);
+let activeStarId: string | null = null;
+let currentSolarSystem: SolarSystem | null = null;
 
 // --- GalaxyLOD ---
 class GalaxyLOD {
@@ -43,6 +48,7 @@ class GalaxyLOD {
 	private dynamicPointsGeom!: THREE.BufferGeometry;
 	private dynamicPointsMat!: THREE.PointsMaterial;
 	rotationEnabled = false;
+
 
 	private readonly scale = 0.05;
 	private readonly starDistanceThreshold = 5000;
@@ -137,7 +143,10 @@ class GalaxyLOD {
 
 	animate(time: number) {
 		this.starVisualizers.forEach(vis => {
-			if (vis.mesh.visible) vis.animate(time);
+			if (vis.mesh.visible) {
+				vis.animate(time);
+				vis.updateLabelOrientation(camera);
+			}
 		});
 	}
 }
@@ -181,6 +190,29 @@ container.addEventListener('click', (event) => {
 
 	raycaster.setFromCamera(mouse, camera);
 
+	// 🔍 Détection des planètes si un système est actif
+    if (currentSolarSystem) {
+		const solar = currentSolarSystem as SolarSystem;
+
+        const planetMeshes: THREE.Object3D[] = solar.planetVisualizer.planets.map(p => p.mesh);
+        const planetIntersects = raycaster.intersectObjects(planetMeshes, true);
+
+        if (planetIntersects.length > 0) {
+            const target = planetIntersects[0].object;
+            const targetPos = target.getWorldPosition(new THREE.Vector3());
+            const distance = camera.position.distanceTo(targetPos);
+
+            if (distanceDisplay) {
+                distanceDisplay.textContent = `🪐 Distance à la planète : ${distance.toFixed(2)} unités`;
+            }
+
+            smoothCameraMove(targetPos);
+            console.log("🪐 Planète sélectionnée :", target.name ?? "inconnue");
+            return; // ← évite de traiter le clic comme un clic sur une étoile
+        }
+    }
+
+    // 🔭 Détection des étoiles
 	const allStarMeshes: THREE.Object3D[] = [];
 	galaxyLODs.forEach(lod => {
 		lod.starVisualizers.forEach(vis => {
@@ -197,9 +229,47 @@ container.addEventListener('click', (event) => {
 		if (distanceDisplay) {
 			distanceDisplay.textContent = `📏 Distance à la caméra : ${distance.toFixed(2)} unités`;
 		}
-		moveCameraTo(targetPos);
+
+		//moveCameraTo(targetPos);
+		smoothCameraMove(targetPos);
+
+		// Récupérer l’étoile sélectionnée
+		const selectedStar = galaxyLODs.flatMap(lod => Array.from(lod.starVisualizers.values()))
+			.find(vis => vis.mesh === target || vis.mesh.children.includes(target));
+		console.log("Selected Star: ", selectedStar)
+		if (selectedStar) {
+			console.log("Selected Star: " + selectedStar)
+			const solarSystem = createSolarSystemFromStarVisualizer(selectedStar);
+			if (solarSystem) {
+				currentSolarSystem = solarSystem;
+				displayPlanetDebug(solarSystem);
+			}
+		}
 	}
 });
+
+function createSolarSystemFromStarVisualizer(vis: StarVisualizerCinematic): SolarSystem | null {
+	console.log('🧪 Star descriptor:', vis.descriptor);
+	if (vis.descriptor.seed === undefined || vis.descriptor.index === undefined) return null;
+
+	const solarDescriptor = generateStar({
+		seed: vis.descriptor.seed,
+		index: vis.descriptor.index,
+		rng: vis.descriptor.rng ?? mulberry32(vis.descriptor.seed),
+		parentGalaxy: { size: 100000 }
+	});
+	solarDescriptor.position = vis.mesh.getWorldPosition(new THREE.Vector3());
+
+	const solarSystemDescriptor = {
+		id: `SS-${solarDescriptor.id}`,
+		name: `System-${solarDescriptor.id}`,
+		star: solarDescriptor,
+		planets: solarDescriptor.planets
+	};
+
+	const solarSystem = new SolarSystem(solarSystemDescriptor, { scene, showOrbits: true });
+	return solarSystem;
+}
 
 function moveCameraTo(position: THREE.Vector3) {
 	camera.position.copy(position.clone().add(new THREE.Vector3(0, 0, 500)));
@@ -222,3 +292,36 @@ animate();
 
 // --- Debug ---
 (window as any).app = { renderer, scene, camera, universe, galaxyLODs };
+
+function displayPlanetDebug(system: SolarSystem) {
+	const descriptor = system.getDescriptor();
+	const list = document.getElementById('planetList');
+	if (!list) return;
+
+	list.innerHTML = '';
+	descriptor.planets.forEach((p, i) => {
+		const li = document.createElement('li');
+		li.textContent = `${p.name ?? 'Planète-' + (i + 1)} — ${p.type} — taille: ${p.size.toFixed(2)} — distance: ${p.distance.toFixed(0)}`;
+		list.appendChild(li);
+	});
+}
+
+function smoothCameraMove(target: THREE.Vector3, duration = 2) {
+	const startPos = camera.position.clone();
+	const endPos = target.clone().add(new THREE.Vector3(0, 0, 500));
+	const startTarget = controls.target.clone();
+	const endTarget = target.clone();
+
+	let elapsed = 0;
+	const animateMove = () => {
+		elapsed += clock.getDelta();
+		const t = Math.min(elapsed / duration, 1);
+
+		camera.position.lerpVectors(startPos, endPos, t);
+		controls.target.lerpVectors(startTarget, endTarget, t);
+		controls.update();
+
+		if (t < 1) requestAnimationFrame(animateMove);
+	};
+	animateMove();
+}

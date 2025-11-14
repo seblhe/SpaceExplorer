@@ -17,6 +17,8 @@ export function generatePlanet({
 	rng = Math.random as unknown as RNG,
 	hostStar = {}
 }: GeneratePlanetOpts): PlanetDescriptor {
+
+	//console.log("Planete generatePlanet")
 	const local = mulberry32((seed >>> 0) + index * 911);
 
 	// ---- Type de planète ----
@@ -41,8 +43,8 @@ export function generatePlanet({
 		type === 'habitable'
 			? pick(local, ['thin', 'breathable', 'dense'])
 			: atmosChance > 0.85
-			? pick(local, ['thin', 'toxic', 'thin'])
-			: 'none';
+				? pick(local, ['thin', 'toxic', 'thin'])
+				: 'none';
 
 	// ---- Ressources ----
 	const resources = {
@@ -63,11 +65,12 @@ export function generatePlanet({
 
 	// ---- Lunes ----
 	const numMoons = Math.max(0, Math.floor(local() * (type === 'gaseous' ? 10 : 4)));
-	const moons = [];
-	for (let m = 0; m < numMoons; m++) {
+	const moons:any = [];
+	//TODO : remoce comments for moons
+	/*for (let m = 0; m < numMoons; m++) {
 		const mSeed = (Math.floor(local() * 1e9) ^ (seed + m * 13)) >>> 0;
 		moons.push(generateMoon({ seed: mSeed, index: m, rng: mulberry32(mSeed) }));
-	}
+	}*/
 
 	// ---- Caractéristiques orbitales ----
 	const distance = lerp(
@@ -91,10 +94,10 @@ export function generatePlanet({
 			hostStar.spectralClass === 'M'
 				? 0.5
 				: hostStar.spectralClass === 'K'
-				? 0.8
-				: hostStar.spectralClass === 'F'
-				? 1.2
-				: 1;
+					? 0.8
+					: hostStar.spectralClass === 'F'
+						? 1.2
+						: 1;
 		const distFactor = 1 / Math.sqrt(distance / 100);
 		return Math.round(base * starTempFactor * distFactor * lerp(0.7, 1.3, local()));
 	})();

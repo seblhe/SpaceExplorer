@@ -1,6 +1,7 @@
 // src/cosmos/StarVisualizerCinematic.ts
 import * as THREE from 'three';
 import type { SolarEvent, SolarEventVisual, StarDescriptor } from './types';
+import { mulberry32, seedFromId } from './prng';
 
 interface StarVisualizerOptions {
 	lodDistance?: number;
@@ -23,15 +24,75 @@ export class StarVisualizerCinematic {
 	private eventCooldown = 0;
 
 	constructor(public descriptor: StarDescriptor, opts: StarVisualizerOptions = {}) {
+		//console.log("StarVisualizerCinematic constructor")
 		this.lodDistance = opts.lodDistance ?? 600;
 
 		this.mesh = new THREE.Object3D();
 		this.mesh.name = `star-${descriptor.id}`;
 
+		this.descriptor = {
+			...descriptor,
+			seed: descriptor.seed ?? seedFromId(descriptor.id),
+			index: descriptor.index ?? 0,
+			rng: descriptor.rng ?? mulberry32(descriptor.seed ?? seedFromId(descriptor.id))
+		};
+
 		this.buildSurfaceLOD();
 	}
 
 	// ==================== SURFACE ====================
+	private createTextTexture(text: string, options?: {
+		font?: string;
+		fontSize?: number;
+		color?: string;
+		background?: string;
+		padding?: number;
+	}): THREE.Texture {
+		const {
+			font = 'Arial',
+			fontSize = 48,
+			color = '#ffffff',
+			background = 'transparent',
+			padding = 20
+		} = options ?? {};
+
+		const canvas = document.createElement('canvas');
+		const context = canvas.getContext('2d')!;
+		context.font = `${fontSize}px ${font}`;
+
+		// Mesure du texte
+		const textWidth = context.measureText(text).width;
+		canvas.width = textWidth + padding * 2;
+		canvas.height = fontSize + padding * 2;
+
+		// Redessiner avec dimensions correctes
+		context.font = `${fontSize}px ${font}`;
+		context.textAlign = 'center';
+		context.textBaseline = 'middle';
+
+		if (background !== 'transparent') {
+			context.fillStyle = background;
+			context.fillRect(0, 0, canvas.width, canvas.height);
+		}
+
+		context.fillStyle = color;
+		context.fillText(text, canvas.width / 2, canvas.height / 2);
+
+		const texture = new THREE.CanvasTexture(canvas);
+		texture.minFilter = THREE.LinearFilter;
+		texture.magFilter = THREE.LinearFilter;
+		texture.needsUpdate = true;
+
+		return texture;
+	}
+
+	public updateLabelOrientation(camera: THREE.Camera) {
+		const label = this.mesh.children.find(obj => obj instanceof THREE.Sprite) as THREE.Sprite;
+		if (label) {
+			label.quaternion.copy(camera.quaternion);
+		}
+	}
+
 	private buildSurfaceLOD() {
 		const size = this.descriptor.size ?? 10;
 		const sunColor = new THREE.Color(this.getColor());
@@ -55,9 +116,35 @@ export class StarVisualizerCinematic {
 
 		const geom = new THREE.SphereGeometry(1, 64, 32);
 		this.surfaceMesh = new THREE.Mesh(geom, material);
-		const baseSize = this.descriptor.size ?? 10;
+		const baseSize = (this.descriptor.size ?? 1) * 100;
 		this.surfaceMesh.scale.setScalar(baseSize);
 		this.mesh.add(this.surfaceMesh);
+
+		/*const glowGeom = new THREE.SphereGeometry(baseSize * 1.5, 64, 32);
+		const glowMat = new THREE.MeshBasicMaterial({
+			color: new THREE.Color(this.getColor()),
+			transparent: true,
+			opacity: 0.3,
+			side: THREE.BackSide
+		});
+		const glowMesh = new THREE.Mesh(glowGeom, glowMat);
+		this.mesh.add(glowMesh);*/
+		/*const labelTexture = this.createTextTexture(this.descriptor.id ?? 'Soleil', {
+			fontSize: 64,
+			color: '#ffff88',
+			background: 'rgba(0,0,0,0.3)'
+		});
+
+		const labelMaterial = new THREE.SpriteMaterial({
+			map: labelTexture,
+			transparent: true,
+			depthWrite: false
+		});
+
+		const label = new THREE.Sprite(labelMaterial);
+		label.scale.set(300, 100, 1); // adapte à ta scène
+		label.position.set(0, baseSize * 1.2, 0);
+		this.mesh.add(label);*/
 	}
 
 	// ==================== ÉVÉNEMENTS SOLAIRES ====================
@@ -284,7 +371,7 @@ export class StarVisualizerCinematic {
 		if (shouldAnimate !== this.isCloseLOD) {
 			this.isCloseLOD = shouldAnimate;
 			this.surfaceMesh.visible = true;
-			console.log('shouldAnimate:', shouldAnimate, 'distance:', distanceToCamera);
+			//console.log('shouldAnimate:', shouldAnimate, 'distance:', distanceToCamera);
 		}
 
 		const baseSize = this.descriptor.size ?? 10;
@@ -294,7 +381,7 @@ export class StarVisualizerCinematic {
 
 		// Création d'événements solaires selon un cooldown
 		if (shouldAnimate) {
-			console.log('Animation --> shouldAnimate:', shouldAnimate, 'distance:', distanceToCamera);
+			//console.log('Animation --> shouldAnimate:', shouldAnimate, 'distance:', distanceToCamera);
 			this.eventCooldown -= 0.016;
 			if (this.eventCooldown <= 0) {
 				this.activeEvents.push(this.createSolarEvent());
@@ -378,7 +465,7 @@ export class StarVisualizerCinematic {
 	}
 
 	private vertexShader(): string {
-    return `
+		return `
         uniform float time;
         uniform float size;
         uniform float noiseOffset;

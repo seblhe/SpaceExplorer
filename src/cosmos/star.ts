@@ -3,19 +3,13 @@ import type { StarDescriptor } from './types';
 import { mulberry32 } from './prng';
 import { generatePlanet } from './planet';
 
-interface GenerateStarOpts {
-  seed: number;
-  index: number;
-  rng: ReturnType<typeof mulberry32>;
-  parentGalaxy: { size: number };
-}
-
 export function generateStar(opts: { 
   seed: number; 
   index: number; 
   rng: ReturnType<typeof mulberry32>; 
   parentGalaxy: { size: number; age?: number }; 
 }): StarDescriptor {
+  //console.log("Star generateStar")
   const { seed, index, rng, parentGalaxy } = opts;
 
   // Spectral classes selon la classification réelle OBAFGKM
@@ -67,9 +61,11 @@ export function generateStar(opts: {
 
     planets.push(planet);
   }
+  //console.log(planets.length +" planètes générées")
 
   return {
     id: `STAR-${seed}-${index}`,
+	name: `STAR-${seed}-${index}`,
     spectralClass,
     mass,
     luminosity,

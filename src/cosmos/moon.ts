@@ -15,6 +15,8 @@ export function generateMoon({
   rng,
   hostPlanet
 }: GenerateMoonOpts): MoonDescriptor {
+	
+  //console.log("Moon generateMoon")
   // Rayon réaliste : proportionnel à la planète hôte si disponible
   const baseRadius = hostPlanet?.radiusKm ? hostPlanet.radiusKm * 0.1 : 2000;
   const radiusKm = Math.round(lerp(100, baseRadius, rng()));

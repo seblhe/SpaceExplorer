@@ -35,6 +35,7 @@ export interface MoonDescriptor {
  *  -------------------- */
 export interface PlanetDescriptor {
 	id: string;
+	index: number;
 	name: string;
 	size: number;                // taille (utilisée pour rendu 3D)
 	color?: string;               // couleur visuelle
@@ -58,6 +59,8 @@ export interface PlanetDescriptor {
 	temperature?: number;
 	habitability?: number;
 	moons: MoonDescriptor[];
+    structures?: StructureDescriptor[];
+    tags?: string[];
 }
 
 /** ---------------------
@@ -65,6 +68,7 @@ export interface PlanetDescriptor {
  *  -------------------- */
 export interface StarDescriptor {
 	id: string;
+	name: string;
 	spectralClass: 'O' | 'B' | 'A' | 'F' | 'G' | 'K' | 'M';
 	mass: number;                // en masses solaires approximatives
 	luminosity: number;          // en luminosités solaires
@@ -73,6 +77,9 @@ export interface StarDescriptor {
 	size: number;                // échelle visuelle
 	planets: PlanetDescriptor[];
 	position: { x: number; y: number; z: number }; // position dans la galaxie
+    seed?: number;
+    index?: number;
+    rng?: any;
 }
 
 /** ---------------------
