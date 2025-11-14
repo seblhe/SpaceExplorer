@@ -35,6 +35,19 @@
             color: #bbb;
             font-size: 0.85rem;
         }
+        
+        #distanceDisplay {
+            position: absolute;
+            left: 12px;
+            bottom: 12px;
+            z-index: 10;
+            color: white;
+            font-family: system-ui, -apple-system, Roboto, "Segoe UI", sans-serif;
+            background: rgba(0, 0, 0, 0.25);
+            padding: 8px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+        }
     </style>
 </head>
 
@@ -51,7 +64,8 @@
         <div id="info" class="muted" style="margin-top:6px;">Galaxy: <span id="gal-name">—</span></div>
     </div>
 
-    <!-- Vite will resolve /src/main.ts -->
+    <div id="distanceDisplay">📏 Distance à la caméra : —</div>
+
     <script type="module" src="/src/main.ts"></script>
 </body>
 

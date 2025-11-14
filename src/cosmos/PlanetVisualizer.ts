@@ -32,6 +32,7 @@ export class PlanetVisualizer {
     }
 
     private createPlanetMesh(p: PlanetDescriptor, starPos: THREE.Vector3) {
+		console.log("createPlanetMesh")
         const radiusScale = p.size * 200;
         const geom = new THREE.SphereGeometry(radiusScale, 32, 32);
         const mat = new THREE.MeshStandardMaterial({ color: new THREE.Color(p.color), roughness: 0.8, metalness: 0.05 });

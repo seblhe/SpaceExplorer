@@ -1,5 +1,7 @@
 // src/cosmos/types.ts
 
+import * as THREE from 'three'
+
 /** ---------------------
  *  SOLAR SYSTEM
  *  -------------------- */
@@ -72,6 +74,20 @@ export interface StarDescriptor {
 	planets: PlanetDescriptor[];
 	position: { x: number; y: number; z: number }; // position dans la galaxie
 }
+
+/** ---------------------
+ *  ÉVENEMENT SOLAIRE
+ *  -------------------- */
+export type SolarEventVisual = THREE.Mesh | THREE.Points | THREE.Line;
+export interface SolarEvent {
+	type: 'loop' | 'jet' | 'shockwave';
+	mesh: SolarEventVisual; // <- spécifier Mesh ici
+	duration: number;
+	elapsed: number;
+	position: THREE.Vector3;
+	scale: number;
+}
+
 
 /** ---------------------
  *  PHÉNOMÈNES COSMIQUES

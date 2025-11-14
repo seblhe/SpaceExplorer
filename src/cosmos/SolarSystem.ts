@@ -18,7 +18,7 @@ export class SolarSystem {
 
         // ---- Soleil ----
         this.starVisualizer = new StarVisualizerCinematic(descriptor.star, {
-            showOrbits: opts.showOrbits
+            //showOrbits: opts.showOrbits
         });
         opts.scene.add(this.starVisualizer.mesh);
 
@@ -37,7 +37,7 @@ export class SolarSystem {
         this.starVisualizer.animate(elapsedTime);
 
         // ---- Affichage orbites si proche ----
-        const showOrbits = distanceToStar < 1000;
+        const showOrbits = distanceToStar < 500;
         this.planetVisualizer.toggleOrbits(showOrbits);
 
         // ---- Mise à jour planètes et lunes ----
