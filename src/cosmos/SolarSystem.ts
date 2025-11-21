@@ -27,6 +27,7 @@ export class SolarSystem {
 		// ---- Lumière du soleil ----
 		const starLight = new THREE.PointLight(0xffffff, 2, 0); // lumière infinie
 		starLight.position.copy(descriptor.star.position);
+		starLight.castShadow = true;
 		opts.scene.add(starLight);
 
 		// ---- Planètes et lunes ----
@@ -53,7 +54,7 @@ export class SolarSystem {
 		this.planetVisualizer.toggleOrbits(showOrbits);
 
 		// ---- Mise à jour planètes et lunes ----
-		this.planetVisualizer.update(elapsedTime);
+		this.planetVisualizer.update(elapsedTime, this.starVisualizer.mesh.position);
 	}
 
 	dispose() {

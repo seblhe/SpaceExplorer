@@ -4,6 +4,7 @@ import type { PlanetDescriptor } from './types';
 export interface PlanetVisualizerOptions {
 	showOrbits?: boolean;
 	starPosition?: THREE.Vector3;
+	shadowDarkness?: number; // 0 = pas d'ombre, 1 = très sombre
 }
 
 export class PlanetVisualizer {
@@ -19,6 +20,11 @@ export class PlanetVisualizer {
 		this.group = new THREE.Group();
 		this.group.position.copy(opts.starPosition ?? new THREE.Vector3(0, 0, 0));
 		scene.add(this.group);
+
+		// Ajoute une lumière ambiante pour simuler l'ombre côté opposé au soleil
+		const shadowDarkness = opts.shadowDarkness ?? 0.1; // 0.3 = côté sombre à 30% de la lumière
+		const ambient = new THREE.AmbientLight(0xffffff, shadowDarkness);
+		this.group.add(ambient);
 
 		planetsData.forEach((p, i) => {
 			const planetWithIndex = { ...p, index: i }; // ← injecte l'index
@@ -66,20 +72,49 @@ export class PlanetVisualizer {
 
 		// Création de la planète
 		const textureLoader = new THREE.TextureLoader();
-		// Utilise le chemin public et l'extension .png
 		const texturePath = '/textures/' + p.type + '_planet.png';
 		const texture = textureLoader.load(texturePath);
 		const geom = new THREE.SphereGeometry(radiusScale, 32, 32);
-		const mat = new THREE.MeshStandardMaterial({
-			//color: new THREE.Color(p.color),
-			map: texture,
-			roughness: 1,
-			metalness: 0
-			/*roughness: 0.8,
-			metalness: 0.05*/
+
+		// ShaderMaterial avec effet jour/nuit
+		const sunPosition = this.group.position.clone(); // centre du système = soleil
+		const shadowDarkness = (this as any).shadowDarkness ?? 0.3;
+		const mat = new THREE.ShaderMaterial({
+			uniforms: {
+				sunPos: { value: sunPosition },
+				texture1: { value: texture },
+				shadowDarkness: { value: 0.15 } // côté opposé quasi noir
+			},
+			vertexShader: `
+				varying vec3 vWorldPosition;
+				varying vec3 vNormal;
+				varying vec2 vUv;
+				void main() {
+					vUv = uv;
+					vNormal = normalize(mat3(modelMatrix) * normal);
+					vWorldPosition = (modelMatrix * vec4(position, 1.0)).xyz;
+					gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+				}
+			`,
+			fragmentShader: `
+				uniform sampler2D texture1;
+				uniform vec3 sunPos;
+				uniform float shadowDarkness;
+				varying vec3 vWorldPosition;
+				varying vec3 vNormal;
+				varying vec2 vUv;
+				void main() {
+					vec3 toSun = normalize(sunPos - vWorldPosition);
+					float intensity = max(dot(normalize(vNormal), toSun), 0.0);
+					float shade = shadowDarkness + (1.0 - shadowDarkness) * intensity;
+					vec4 texColor = texture2D(texture1, vUv);
+					gl_FragColor = vec4(texColor.rgb * shade, texColor.a);
+				}
+			`,
 		});
 		const mesh = new THREE.Mesh(geom, mat);
-		mesh.position.set(x, 0, z); // pas de y ici
+		mesh.position.set(x, 0, z);
+		mesh.receiveShadow = true;
 
 		// Ligne d’orbite inclinée
 		const orbitPoints = orbitCurve.getPoints(120).map(pt => {
@@ -120,7 +155,7 @@ export class PlanetVisualizer {
 
 
 
-	public update(elapsedTime: number) {
+	public update(elapsedTime: number, sunPosition?: THREE.Vector3) {
 		this.planets.forEach((planetObj) => {
 			const p = planetObj.descriptor;
 			const radiusScale = p.size * 50;
@@ -136,6 +171,21 @@ export class PlanetVisualizer {
 			const z = Math.sin(angle) * distance;
 			const y = Math.sin(incl) * distance * 0.1;
 			planetObj.mesh.position.set(x, y, z);
+
+			// Met à jour la position du soleil dans le shader
+			// Utilise la position du mesh du soleil du système
+			if (sunPosition) {
+				planetObj.mesh.traverse(obj => {
+					const meshObj = obj as THREE.Mesh;
+					if (
+						meshObj.material &&
+						(meshObj.material as any).uniforms &&
+						(meshObj.material as any).uniforms.sunPos
+					) {
+						(meshObj.material as any).uniforms.sunPos.value.set(sunPosition.x, sunPosition.y, sunPosition.z);
+					}
+				});
+			}
 
 			if (p.selfRotationSpeed) planetObj.mesh.rotation.y += p.selfRotationSpeed;
 
