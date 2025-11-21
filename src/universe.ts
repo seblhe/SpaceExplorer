@@ -10,7 +10,7 @@ export class Universe {
   sizeRange: [number, number];
 
   constructor(opts: { seed?: number; sizeRange?: [number,number] } = {}) {
-	console.log("Universe constructor")
+	//console.log("Universe constructor")
     this.seed = opts.seed ?? Math.floor(Math.random()*1e9)>>>0;
     this.rng = mulberry32(this.seed);
     this.cache = new Map();
