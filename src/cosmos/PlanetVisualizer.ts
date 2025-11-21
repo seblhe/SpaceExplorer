@@ -66,7 +66,9 @@ export class PlanetVisualizer {
 
 		// Création de la planète
 		const textureLoader = new THREE.TextureLoader();
-		const texture = textureLoader.load('./textures/rocky_planet.jpg'); // ← chemin vers ton image
+		// Utilise le chemin public et l'extension .png
+		const texturePath = '/textures/' + p.type + '_planet.png';
+		const texture = textureLoader.load(texturePath);
 		const geom = new THREE.SphereGeometry(radiusScale, 32, 32);
 		const mat = new THREE.MeshStandardMaterial({
 			//color: new THREE.Color(p.color),
