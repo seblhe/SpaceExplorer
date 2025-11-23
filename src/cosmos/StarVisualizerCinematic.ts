@@ -16,6 +16,7 @@ export class StarVisualizerCinematic {
 		color: { value: THREE.Color };
 		size: { value: number };
 		noiseOffset: { value: number };
+		texture1: { value: THREE.Texture };
 	};
 
 	private readonly lodDistance: number;
@@ -52,11 +53,16 @@ export class StarVisualizerCinematic {
 		const sunColor = new THREE.Color(this.getColor());
 		const glowColor = new THREE.Color(1 - sunColor.r, 1 - sunColor.g, 1 - sunColor.b);
 
+		// Charge la texture du soleil
+		const textureLoader = new THREE.TextureLoader();
+		const sunTexture = textureLoader.load('textures/sun_' + this.descriptor.spectralClass.toLowerCase() + '.png');
+
 		this.uniforms = {
 			time: { value: 0 },
 			color: { value: glowColor },
 			size: { value: size },
-			noiseOffset: { value: Math.random() * 1000 }
+			noiseOffset: { value: Math.random() * 1000 },
+			texture1: { value: sunTexture }
 		};
 
 		const material = new THREE.ShaderMaterial({
@@ -428,10 +434,16 @@ export class StarVisualizerCinematic {
 	private fragmentShader(): string {
 		return `
 			uniform vec3 color;
+			uniform sampler2D texture1;
 			varying vec3 vNormal;
 			varying vec3 vPosition;
 			void main(){
-				vec3 col = color;
+				vec2 uv = vec2(
+					0.5 + atan(vNormal.z, vNormal.x) / (2.0 * 3.1415926),
+					0.5 - asin(vNormal.y) / 3.1415926
+				);
+				vec4 texColor = texture2D(texture1, uv);
+				vec3 col = mix(color, texColor.rgb, 0.8);
 				gl_FragColor = vec4(col, 1.0);
 			}
 		`;
