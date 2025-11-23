@@ -61,10 +61,20 @@
             <button id="zoomOut">Zoom Out</button>
             <button id="toggleRotate">Toggle rotate</button>
         </div>
-        <div id="info" class="muted" style="margin-top:6px;">Galaxy: <span id="gal-name">—</span></div>
-        <div id="planetDebug" class="muted" style="margin-top:6px;">
-            <strong>🌍 Planètes :</strong>
-            <ul id="planetList" style="padding-left: 16px; margin: 4px 0;"></ul>
+        <!-- Infos galaxie -->
+        <div id="galaxyInfo" class="muted" style="margin-top:10px;">
+            <strong>🌌 Galaxie</strong><br> Nom : <span id="galaxy-name">—</span><br> Coordonnées : <span id="galaxy-coords">—</span><br> Type : <span id="galaxy-type">—</span><br> Systèmes : <span id="galaxy-systems">—</span>
+        </div>
+        <!-- Infos système solaire -->
+        <div id="systemInfo" class="muted" style="margin-top:10px;">
+            <strong>☀️ Système solaire</strong><br> Nom : <span id="system-name">—</span><br> Coordonnées : <span id="system-coords">—</span><br> Spectral : <span id="system-spectral">—</span><br> Planètes : <span id="system-planets">—</span><br>
+            <ul id="system-planet-list" style="padding-left: 16px; margin: 4px 0;"></ul>
+        </div>
+        <!-- Infos planète -->
+        <div id="planetInfo" class="muted" style="margin-top:10px;">
+            <strong>🪐 Planète</strong><br> Nom : <span id="planet-name">—</span><br> Type : <span id="planet-type">—</span><br> Distance au soleil : <span id="planet-distance">—</span><br> Biome : <span id="planet-biome">—</span><br> Gravité :
+            <span
+                id="planet-gravity">—</span><br> Atmosphère : <span id="planet-atmosphere">—</span><br> Lunes : <span id="planet-moons">—</span>
         </div>
     </div>
 

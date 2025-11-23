@@ -10,6 +10,7 @@ interface StarVisualizerOptions {
 export class StarVisualizerCinematic {
 	public mesh: THREE.Object3D;
 	private surfaceMesh!: THREE.Mesh;
+	private surfaceMeshTexture!: THREE.Mesh;
 	private activeEvents: SolarEvent[] = [];
 	private uniforms!: {
 		time: { value: number };
@@ -51,34 +52,31 @@ export class StarVisualizerCinematic {
 	private buildSurfaceLOD() {
 		const size = this.descriptor.size ?? 10;
 		const sunColor = new THREE.Color(this.getColor());
-		const glowColor = new THREE.Color(1 - sunColor.r, 1 - sunColor.g, 1 - sunColor.b);
-
-		// Charge la texture du soleil
-		const textureLoader = new THREE.TextureLoader();
-		const sunTexture = textureLoader.load('textures/sun_' + this.descriptor.spectralClass.toLowerCase() + '.png');
-
-		this.uniforms = {
-			time: { value: 0 },
-			color: { value: glowColor },
-			size: { value: size },
-			noiseOffset: { value: Math.random() * 1000 },
-			texture1: { value: sunTexture }
-		};
-
-		const material = new THREE.ShaderMaterial({
-			uniforms: this.uniforms,
-			vertexShader: this.vertexShader(),
-			fragmentShader: this.fragmentShader(),
-			transparent: false,
-			blending: THREE.AdditiveBlending,
-			depthWrite: true
-		});
-
 		const geom = new THREE.SphereGeometry(1, 64, 32);
-		this.surfaceMesh = new THREE.Mesh(geom, material);
-		const baseSize = (this.descriptor.size ?? 1) * 100;
-		this.surfaceMesh.scale.setScalar(baseSize);
-		this.mesh.add(this.surfaceMesh);
+
+		// Texture image selon spectralClass
+		const textureLoader = new THREE.TextureLoader();
+		const spectralClass = this.descriptor.spectralClass?.toLowerCase() ?? 'g';
+		let sunTexture: THREE.Texture | null = null;
+		try {
+			sunTexture = textureLoader.load('textures/sun_' + spectralClass + '.png');
+		} catch (e) {
+			sunTexture = null;
+		}
+
+		let materialTexture: THREE.MeshBasicMaterial;
+		if (sunTexture) {
+			materialTexture = new THREE.MeshBasicMaterial({ map: sunTexture });
+		} else {
+			materialTexture = new THREE.MeshBasicMaterial({ color: sunColor });
+		}
+		this.surfaceMeshTexture = new THREE.Mesh(geom, materialTexture);
+
+		// On utilise uniquement le mesh avec texture/couleur
+		const baseSize = (this.descriptor.size ?? 1) * 10;
+		this.surfaceMeshTexture.scale.setScalar(baseSize);
+		this.mesh.add(this.surfaceMeshTexture);
+		this.surfaceMeshTexture.visible = true;
 	}
 
 	// ==================== ÉVÉNEMENTS SOLAIRES ====================
@@ -298,20 +296,19 @@ export class StarVisualizerCinematic {
 	// ==================== ANIMATION ====================
 	updateEffects(distanceToCamera: number) {
 		//console.log('🌀 updateEffects called, distanceToCamera =', distanceToCamera);
-		const shouldAnimate = distanceToCamera < this.lodDistance;
-		//console.log('🔍 shouldAnimate =', shouldAnimate, '| isCloseLOD =', this.isCloseLOD);
-		//console.log('shouldAnimate:', shouldAnimate, 'distance:', distanceToCamera);
+		// Rayon du système solaire (ex: 1000, à adapter si variable)
+		const systemRadius = (this.descriptor.size ?? 1) * 1000;
+		const shouldShowTexture = (distanceToCamera < systemRadius) || (distanceToCamera < 600);
+		// On n'utilise plus surfaceMesh, uniquement surfaceMeshTexture
+		this.surfaceMeshTexture.visible = true;
 
-		if (shouldAnimate !== this.isCloseLOD) {
-			this.isCloseLOD = shouldAnimate;
-			this.surfaceMesh.visible = true;
-			//console.log('shouldAnimate:', shouldAnimate, 'distance:', distanceToCamera);
-		}
+		// Animation et événements solaires (LOD)
+		const shouldAnimate = distanceToCamera < this.lodDistance;
 
 		const baseSize = this.descriptor.size ?? 10;
 		const targetScale = baseSize * THREE.MathUtils.clamp(this.lodDistance / (distanceToCamera + 1), 0.9, 1.1);
 		this.currentScale = THREE.MathUtils.lerp(this.currentScale, targetScale, 0.08);
-		this.surfaceMesh.scale.setScalar(this.currentScale);
+		this.surfaceMeshTexture.scale.setScalar(this.currentScale);
 
 		// Création d'événements solaires selon un cooldown
 		if (shouldAnimate) {
@@ -382,7 +379,9 @@ export class StarVisualizerCinematic {
 
 	animate(elapsedSeconds: number) {
 		//this.uniforms.time.value = elapsedSeconds;
-		this.uniforms.time.value += elapsedSeconds * 0.05; // ✅ ralentit le temps 5x
+		if (this.uniforms) {
+			this.uniforms.time.value += elapsedSeconds * 0.05; // ✅ ralentit le temps 5x
+		}
 	}
 
 	private getColor(): string {

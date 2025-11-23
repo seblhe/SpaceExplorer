@@ -11,7 +11,25 @@ import { mulberry32 } from './cosmos/prng';
 // --- DOM ---
 const container = document.getElementById('app') as HTMLDivElement;
 const seedEl = document.getElementById('seed') as HTMLElement;
-const galNameEl = document.getElementById('gal-name') as HTMLElement;
+// Nouveaux éléments pour l'affichage structuré
+const galaxyNameEl = document.getElementById('galaxy-name') as HTMLElement;
+const galaxyCoordsEl = document.getElementById('galaxy-coords') as HTMLElement;
+const galaxyTypeEl = document.getElementById('galaxy-type') as HTMLElement;
+const galaxySystemsEl = document.getElementById('galaxy-systems') as HTMLElement;
+
+const systemNameEl = document.getElementById('system-name') as HTMLElement;
+const systemCoordsEl = document.getElementById('system-coords') as HTMLElement;
+const systemSpectralEl = document.getElementById('system-spectral') as HTMLElement;
+const systemPlanetsEl = document.getElementById('system-planets') as HTMLElement;
+const systemPlanetListEl = document.getElementById('system-planet-list') as HTMLElement;
+
+const planetNameEl = document.getElementById('planet-name') as HTMLElement;
+const planetTypeEl = document.getElementById('planet-type') as HTMLElement;
+const planetDistanceEl = document.getElementById('planet-distance') as HTMLElement;
+const planetBiomeEl = document.getElementById('planet-biome') as HTMLElement;
+const planetGravityEl = document.getElementById('planet-gravity') as HTMLElement;
+const planetAtmosphereEl = document.getElementById('planet-atmosphere') as HTMLElement;
+const planetMoonsEl = document.getElementById('planet-moons') as HTMLElement;
 
 // --- Renderer ---
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -34,7 +52,7 @@ controls.dampingFactor = 0.08;
 const universe = new Universe({ seed: Math.floor(Math.random() * 1e9), sizeRange: [40000, 200000] });
 seedEl.textContent = String(universe.seed);
 const originGalaxy = universe.getGalaxyAt({ x: 0, y: 0, z: 0 });
-galNameEl.textContent = originGalaxy.id ?? 'unknown';
+displayGalaxyInfo(originGalaxy);
 const bg = universe.getBackgroundColorForGalaxy?.(originGalaxy) ?? [8, 10, 18];
 scene.background = new THREE.Color(`rgb(${bg[0]},${bg[1]},${bg[2]})`);
 let activeStarId: string | null = null;
@@ -208,6 +226,11 @@ container.addEventListener('click', (event) => {
 
             smoothCameraMove(targetPos);
             console.log("🪐 Planète sélectionnée :", target.name ?? "inconnue");
+			   // Trouver la planète sélectionnée (mesh ou enfant)
+			   const planetObj = solar.planetVisualizer.planets.find(p => p.mesh === target || p.mesh.children.includes(target));
+			   if (planetObj) {
+				   displayPlanetInfo(planetObj.descriptor);
+			   }
             return; // ← évite de traiter le clic comme un clic sur une étoile
         }
     }
@@ -242,7 +265,9 @@ container.addEventListener('click', (event) => {
 			const solarSystem = createSolarSystemFromStarVisualizer(selectedStar);
 			if (solarSystem) {
 				currentSolarSystem = solarSystem;
-				displayPlanetDebug(solarSystem);
+				displaySystemInfo(solarSystem.getDescriptor());
+				// On efface l'info planète
+				clearPlanetInfo();
 			}
 		}
 	}
@@ -293,17 +318,45 @@ animate();
 // --- Debug ---
 (window as any).app = { renderer, scene, camera, universe, galaxyLODs };
 
-function displayPlanetDebug(system: SolarSystem) {
-	const descriptor = system.getDescriptor();
-	const list = document.getElementById('planetList');
-	if (!list) return;
 
-	list.innerHTML = '';
-	descriptor.planets.forEach((p, i) => {
+function displayGalaxyInfo(galaxy: GalaxyDescriptor) {
+	galaxyNameEl.textContent = galaxy.id ?? '—';
+	galaxyCoordsEl.textContent = `${galaxy.positionCell?.x ?? 0}, ${galaxy.positionCell?.y ?? 0}, ${galaxy.positionCell?.z ?? 0}`;
+	galaxyTypeEl.textContent = galaxy.type ?? '—';
+	galaxySystemsEl.textContent = galaxy.numSystems?.toString() ?? '—';
+}
+
+function displaySystemInfo(system: SolarSystemDescriptor) {
+	systemNameEl.textContent = system.name ?? '—';
+	systemCoordsEl.textContent = `${system.star.position?.x?.toFixed(0) ?? 0}, ${system.star.position?.y?.toFixed(0) ?? 0}, ${system.star.position?.z?.toFixed(0) ?? 0}`;
+	systemSpectralEl.textContent = system.star.spectralClass ?? '—';
+	systemPlanetsEl.textContent = system.planets?.length?.toString() ?? '—';
+	systemPlanetListEl.innerHTML = '';
+	system.planets.forEach((p, i) => {
 		const li = document.createElement('li');
-		li.textContent = `${p.name ?? 'Planète-' + (i + 1)} — ${p.type} — taille: ${p.size.toFixed(2)} — distance: ${p.distance.toFixed(0)}`;
-		list.appendChild(li);
+		li.textContent = `${p.name ?? 'Planète-' + (i + 1)} — ${p.type} — distance: ${p.distance?.toFixed(0) ?? '—'}`;
+		systemPlanetListEl.appendChild(li);
 	});
+}
+
+function displayPlanetInfo(planet: import('./cosmos/types').PlanetDescriptor) {
+	planetNameEl.textContent = planet.name ?? '—';
+	planetTypeEl.textContent = planet.type ?? '—';
+	planetDistanceEl.textContent = planet.distance?.toFixed(0) ?? '—';
+	planetBiomeEl.textContent = planet.biome ?? '—';
+	planetGravityEl.textContent = planet.gravityG?.toFixed(2) ?? '—';
+	planetAtmosphereEl.textContent = planet.atmosphere ?? '—';
+	planetMoonsEl.textContent = (planet.moons?.map(m => m.id).join(', ') || '—');
+}
+
+function clearPlanetInfo() {
+	planetNameEl.textContent = '—';
+	planetTypeEl.textContent = '—';
+	planetDistanceEl.textContent = '—';
+	planetBiomeEl.textContent = '—';
+	planetGravityEl.textContent = '—';
+	planetAtmosphereEl.textContent = '—';
+	planetMoonsEl.textContent = '—';
 }
 
 function smoothCameraMove(target: THREE.Vector3, duration = 2) {

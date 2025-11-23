@@ -51,13 +51,12 @@ export class PlanetVisualizer {
 		const ex = p.orbitEccentricity ?? 0;
 		const incl = p.orbitInclination ?? 0;
 
-		// Crée la courbe d’orbite
+		// Crée la courbe d’orbite centrée sur le soleil
 		const a = distance;
 		const b = distance * (1 - ex);
-		const c = Math.sqrt(a * a - b * b); // distance du centre au foyer
-
+		// Centre géométrique (le soleil) : (0,0)
 		const orbitCurve = new THREE.EllipseCurve(
-			-c, 0, // ← décalage du centre vers la gauche
+			0, 0, // centre sur le soleil
 			a,
 			b,
 			0, Math.PI * 2,
@@ -113,7 +112,9 @@ export class PlanetVisualizer {
 			`,
 		});
 		const mesh = new THREE.Mesh(geom, mat);
-		mesh.position.set(x, 0, z);
+		// Place la planète sur l'orbite inclinée dès la création
+		const y = Math.sin(incl) * z * 0.1;
+		mesh.position.set(x, y, z);
 		mesh.receiveShadow = true;
 
 		// Ligne d’orbite inclinée
@@ -162,14 +163,17 @@ export class PlanetVisualizer {
 			const baseDistance = 300;
 			const spacingFactor = 1.8; // espacement exponentiel
 
-			const distance = baseDistance * Math.pow(spacingFactor, p.index ?? 0) + radiusScale;
+			const a = baseDistance * Math.pow(spacingFactor, p.index ?? 0) + radiusScale;
 			const ex = p.orbitEccentricity ?? 0;
+			const b = a * (1 - ex);
 			const incl = p.orbitInclination ?? 0;
 			const angle = (elapsedTime * (p.orbitSpeed ?? 0.0001)) + (p.orbitPhase ?? 0);
 
-			const x = Math.cos(angle) * distance * (1 + ex * Math.sin(angle));
-			const z = Math.sin(angle) * distance;
-			const y = Math.sin(incl) * distance * 0.1;
+			// Orbite elliptique centrée sur le soleil
+			const x = a * Math.cos(angle);
+			const z = b * Math.sin(angle);
+			// Inclinaison réelle : la planète doit suivre l'orbite incliné
+			const y = Math.sin(incl) * z * 0.1;
 			planetObj.mesh.position.set(x, y, z);
 
 			// Met à jour la position du soleil dans le shader
