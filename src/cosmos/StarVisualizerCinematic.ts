@@ -40,52 +40,6 @@ export class StarVisualizerCinematic {
 		this.buildSurfaceLOD();
 	}
 
-	// ==================== SURFACE ====================
-	private createTextTexture(text: string, options?: {
-		font?: string;
-		fontSize?: number;
-		color?: string;
-		background?: string;
-		padding?: number;
-	}): THREE.Texture {
-		const {
-			font = 'Arial',
-			fontSize = 48,
-			color = '#ffffff',
-			background = 'transparent',
-			padding = 20
-		} = options ?? {};
-
-		const canvas = document.createElement('canvas');
-		const context = canvas.getContext('2d')!;
-		context.font = `${fontSize}px ${font}`;
-
-		// Mesure du texte
-		const textWidth = context.measureText(text).width;
-		canvas.width = textWidth + padding * 2;
-		canvas.height = fontSize + padding * 2;
-
-		// Redessiner avec dimensions correctes
-		context.font = `${fontSize}px ${font}`;
-		context.textAlign = 'center';
-		context.textBaseline = 'middle';
-
-		if (background !== 'transparent') {
-			context.fillStyle = background;
-			context.fillRect(0, 0, canvas.width, canvas.height);
-		}
-
-		context.fillStyle = color;
-		context.fillText(text, canvas.width / 2, canvas.height / 2);
-
-		const texture = new THREE.CanvasTexture(canvas);
-		texture.minFilter = THREE.LinearFilter;
-		texture.magFilter = THREE.LinearFilter;
-		texture.needsUpdate = true;
-
-		return texture;
-	}
-
 	public updateLabelOrientation(camera: THREE.Camera) {
 		const label = this.mesh.children.find(obj => obj instanceof THREE.Sprite) as THREE.Sprite;
 		if (label) {
@@ -119,32 +73,6 @@ export class StarVisualizerCinematic {
 		const baseSize = (this.descriptor.size ?? 1) * 100;
 		this.surfaceMesh.scale.setScalar(baseSize);
 		this.mesh.add(this.surfaceMesh);
-
-		/*const glowGeom = new THREE.SphereGeometry(baseSize * 1.5, 64, 32);
-		const glowMat = new THREE.MeshBasicMaterial({
-			color: new THREE.Color(this.getColor()),
-			transparent: true,
-			opacity: 0.3,
-			side: THREE.BackSide
-		});
-		const glowMesh = new THREE.Mesh(glowGeom, glowMat);
-		this.mesh.add(glowMesh);*/
-		/*const labelTexture = this.createTextTexture(this.descriptor.id ?? 'Soleil', {
-			fontSize: 64,
-			color: '#ffff88',
-			background: 'rgba(0,0,0,0.3)'
-		});
-
-		const labelMaterial = new THREE.SpriteMaterial({
-			map: labelTexture,
-			transparent: true,
-			depthWrite: false
-		});
-
-		const label = new THREE.Sprite(labelMaterial);
-		label.scale.set(300, 100, 1); // adapte à ta scène
-		label.position.set(0, baseSize * 1.2, 0);
-		this.mesh.add(label);*/
 	}
 
 	// ==================== ÉVÉNEMENTS SOLAIRES ====================
