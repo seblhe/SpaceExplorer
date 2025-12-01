@@ -77,6 +77,7 @@ export interface StarDescriptor {
 	size: number;                // échelle visuelle
 	planets: PlanetDescriptor[];
 	position: { x: number; y: number; z: number }; // position dans la galaxie
+	systemRadius?: number; // Rayon visuel du système solaire (pour éviter les chevauchements)
     seed?: number;
     index?: number;
     rng?: any;
@@ -134,4 +135,5 @@ export interface GalaxyDescriptor {
 	structures: StructureDescriptor[];
 	dominantSpectral: StarDescriptor['spectralClass'];
 	positionCell: { x: number; y: number; z: number };
+	_aabb?: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } };
 }

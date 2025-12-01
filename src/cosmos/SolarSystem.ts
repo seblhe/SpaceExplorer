@@ -6,6 +6,7 @@ import { PlanetVisualizer } from './PlanetVisualizer';
 export interface SolarSystemOptions {
 	showOrbits?: boolean;
 	scene: THREE.Scene;
+	scale?: number;
 }
 
 export class SolarSystem {
@@ -22,6 +23,9 @@ export class SolarSystem {
 			//showOrbits: opts.showOrbits
 		});
     	this.starVisualizer.mesh.position.copy(descriptor.star.position);
+		if (opts.scale) {
+			this.starVisualizer.mesh.scale.setScalar(opts.scale);
+		}
 		//opts.scene.add(this.starVisualizer.mesh);
 
 		// ---- Lumière du soleil ----
@@ -37,21 +41,24 @@ export class SolarSystem {
 				descriptor.star.position.y,
 				descriptor.star.position.z
 			),
-			showOrbits: opts.showOrbits
+			starSize: descriptor.star.size,
+			showOrbits: opts.showOrbits,
+			scale: opts.scale
 		});
 		//opts.scene.add(this.planetVisualizer.group);
 	}
 
 	update(elapsedTime: number, cameraPosition: THREE.Vector3) {
+		// console.log("SolarSystem update", elapsedTime);
 		const distanceToStar = cameraPosition.distanceTo(this.starVisualizer.mesh.position);
 
 		// ---- Mise à jour LOD Soleil ----
 		this.starVisualizer.updateEffects(distanceToStar);
 		this.starVisualizer.animate(elapsedTime);
 
-		// ---- Affichage orbites si proche ----
-		const showOrbits = distanceToStar < 500;
-		this.planetVisualizer.toggleOrbits(showOrbits);
+		// ---- Affichage orbites ----
+		// Toujours afficher les orbites quand le système est actif (sélectionné)
+		this.planetVisualizer.toggleOrbits(true);
 
 		// ---- Mise à jour planètes et lunes ----
 		this.planetVisualizer.update(elapsedTime, this.starVisualizer.mesh.position);

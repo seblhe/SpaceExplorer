@@ -5,6 +5,7 @@ import { mulberry32, seedFromId } from './prng';
 
 interface StarVisualizerOptions {
 	lodDistance?: number;
+	brightnessBoost?: number;
 }
 
 export class StarVisualizerCinematic {
@@ -21,6 +22,7 @@ export class StarVisualizerCinematic {
 	};
 
 	private readonly lodDistance: number;
+	private readonly brightnessBoost: number;
 	private isCloseLOD = false;
 	private currentScale = 1;
 	private eventCooldown = 0;
@@ -28,6 +30,7 @@ export class StarVisualizerCinematic {
 	constructor(public descriptor: StarDescriptor, opts: StarVisualizerOptions = {}) {
 		//console.log("StarVisualizerCinematic constructor")
 		this.lodDistance = opts.lodDistance ?? 600;
+		this.brightnessBoost = opts.brightnessBoost ?? 1.5;
 
 		this.mesh = new THREE.Object3D();
 		this.mesh.name = `star-${descriptor.id}`;
@@ -51,32 +54,62 @@ export class StarVisualizerCinematic {
 
 	private buildSurfaceLOD() {
 		const size = this.descriptor.size ?? 10;
-		const sunColor = new THREE.Color(this.getColor());
+		const spectralColors: Record<string, string> = {
+			O: '#9bb4ff',
+			B: '#aabfff',
+			A: '#cad7ff',
+			F: '#f8f7ff',
+			G: '#fff4ea',
+			K: '#ffd2a1',
+			M: '#ffcc6f'
+		};
+		const spectralBrightness: Record<string, number> = {
+			O: 2.0,
+			B: 1.8,
+			A: 1.6,
+			F: 1.4,
+			G: 1.2,
+			K: 1.0,
+			M: 0.8
+		};
+		const spectralClass = (this.descriptor.spectralClass ?? 'G').toUpperCase();
+		const baseColor = new THREE.Color(spectralColors[spectralClass] ?? '#fff4ea');
+		
+		// Appliquer le boost de luminosité selon la classe spectrale et le paramètre global
+		const brightness = (spectralBrightness[spectralClass] ?? 1.0) * this.brightnessBoost;
+		const sunColor = baseColor.multiplyScalar(brightness);
+
 		const geom = new THREE.SphereGeometry(1, 64, 32);
-
-		// Texture image selon spectralClass
 		const textureLoader = new THREE.TextureLoader();
-		const spectralClass = this.descriptor.spectralClass?.toLowerCase() ?? 'g';
-		let sunTexture: THREE.Texture | null = null;
-		try {
-			sunTexture = textureLoader.load('textures/sun_' + spectralClass + '.png');
-		} catch (e) {
-			sunTexture = null;
-		}
-
-		let materialTexture: THREE.MeshBasicMaterial;
-		if (sunTexture) {
-			materialTexture = new THREE.MeshBasicMaterial({ map: sunTexture });
-		} else {
-			materialTexture = new THREE.MeshBasicMaterial({ color: sunColor });
-		}
-		this.surfaceMeshTexture = new THREE.Mesh(geom, materialTexture);
-
-		// On utilise uniquement le mesh avec texture/couleur
-		const baseSize = (this.descriptor.size ?? 1) * 10;
-		this.surfaceMeshTexture.scale.setScalar(baseSize);
-		this.mesh.add(this.surfaceMeshTexture);
-		this.surfaceMeshTexture.visible = true;
+		const texturePath = '/textures/sun/sun_' + spectralClass.toLowerCase() + '.png';
+		// Crée le mesh après chargement effectif de la texture
+		textureLoader.load(
+			texturePath,
+			(loadedTexture) => {
+				// Texture chargée
+				let materialTexture = new THREE.MeshBasicMaterial({ map: loadedTexture, color: sunColor, opacity: 1, transparent: false });
+				this.surfaceMeshTexture = new THREE.Mesh(geom, materialTexture);
+				// Wireframe supprimé
+				// Taille physique selon la propriété size
+				const baseSize = Math.max(2, size * 2);
+				this.surfaceMeshTexture.scale.setScalar(baseSize);
+				this.mesh.add(this.surfaceMeshTexture);
+				this.surfaceMeshTexture.visible = true;
+				//console.log('[SUN TEXTURE] Loaded and mesh created:', texturePath);
+			},
+			undefined,
+			(err) => {
+				// Échec du chargement, fallback couleur
+				let materialTexture = new THREE.MeshBasicMaterial({ color: sunColor, opacity: 1, transparent: false });
+				this.surfaceMeshTexture = new THREE.Mesh(geom, materialTexture);
+				// Wireframe supprimé
+				const baseSize = Math.max(2, size * 10);
+				this.surfaceMeshTexture.scale.setScalar(baseSize);
+				this.mesh.add(this.surfaceMeshTexture);
+				this.surfaceMeshTexture.visible = true;
+				console.error('[SUN TEXTURE] Load error, fallback color:', texturePath, err);
+			}
+		);
 	}
 
 	// ==================== ÉVÉNEMENTS SOLAIRES ====================
@@ -300,17 +333,17 @@ export class StarVisualizerCinematic {
 		const systemRadius = (this.descriptor.size ?? 1) * 1000;
 		const shouldShowTexture = (distanceToCamera < systemRadius) || (distanceToCamera < 600);
 		// On n'utilise plus surfaceMesh, uniquement surfaceMeshTexture
-		this.surfaceMeshTexture.visible = true;
-
-		// Animation et événements solaires (LOD)
-		const shouldAnimate = distanceToCamera < this.lodDistance;
-
-		const baseSize = this.descriptor.size ?? 10;
-		const targetScale = baseSize * THREE.MathUtils.clamp(this.lodDistance / (distanceToCamera + 1), 0.9, 1.1);
-		this.currentScale = THREE.MathUtils.lerp(this.currentScale, targetScale, 0.08);
-		this.surfaceMeshTexture.scale.setScalar(this.currentScale);
+		if (this.surfaceMeshTexture) {
+			this.surfaceMeshTexture.visible = true;
+			const size = this.descriptor.size ?? 10;
+			const baseSize = Math.max(2, size * 2);
+			const targetScale = baseSize * THREE.MathUtils.clamp(this.lodDistance / (distanceToCamera + 1), 0.9, 1.1);
+			this.currentScale = THREE.MathUtils.lerp(this.currentScale, targetScale, 0.08);
+			this.surfaceMeshTexture.scale.setScalar(this.currentScale);
+		}
 
 		// Création d'événements solaires selon un cooldown
+		const shouldAnimate = distanceToCamera < this.lodDistance;
 		if (shouldAnimate) {
 			//console.log('Animation --> shouldAnimate:', shouldAnimate, 'distance:', distanceToCamera);
 			this.eventCooldown -= 0.016;

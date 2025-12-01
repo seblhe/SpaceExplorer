@@ -4,21 +4,30 @@ import type { PlanetDescriptor } from './types';
 export interface PlanetVisualizerOptions {
 	showOrbits?: boolean;
 	starPosition?: THREE.Vector3;
+	starSize?: number; // Taille de l'étoile pour ajuster la distance
 	shadowDarkness?: number; // 0 = pas d'ombre, 1 = très sombre
+	scale?: number;
 }
 
 export class PlanetVisualizer {
 	public group: THREE.Group;
 	public planets: {
 		mesh: THREE.Object3D;
+		planetSphere: THREE.Mesh;
 		descriptor: PlanetDescriptor;
 		orbitLine: THREE.Line;
+		moonOrbitLines: THREE.Line[];
 		moons: THREE.Mesh[];
 	}[] = [];
+	private starSize: number;
 
 	constructor(planetsData: PlanetDescriptor[], scene: THREE.Scene, opts: PlanetVisualizerOptions = {}) {
 		this.group = new THREE.Group();
 		this.group.position.copy(opts.starPosition ?? new THREE.Vector3(0, 0, 0));
+		this.starSize = opts.starSize ?? 1;
+		if (opts.scale) {
+			this.group.scale.setScalar(opts.scale);
+		}
 		scene.add(this.group);
 
 		// Ajoute une lumière ambiante pour simuler l'ombre côté opposé au soleil
@@ -37,16 +46,22 @@ export class PlanetVisualizer {
 			this.planets.push(planet);
 			if (opts.showOrbits) {
 				planet.orbitLine.visible = true;
+				planet.moonOrbitLines.forEach(l => l.visible = true);
 			}
 		});
 	}
 
 	private createPlanetMesh(p: PlanetDescriptor) {
-		const radiusScale = p.size * 5;
+		// Augmenter la taille visuelle des planètes pour qu'elles soient bien visibles
+		const radiusScale = Math.max(p.size * 20, 5); 
 		const spacingFactor = 1.8;
-		const baseDistance = 300;
-
-		const distance = baseDistance * Math.pow(spacingFactor, (p.index ?? 0) + 1);
+		
+			// Calculer la distance de base en fonction de la taille de l'étoile
+			// Le rayon visuel de l'étoile est starSize * 2 (voir StarVisualizerCinematic)
+			// On veut que la première planète soit au moins à 3x le rayon de l'étoile + une marge
+			const starVisualRadius = Math.max(2, this.starSize * 2);
+			const minBaseDistance = starVisualRadius * 4 + 100;
+			const baseDistance = Math.max(300, minBaseDistance);		const distance = baseDistance * Math.pow(spacingFactor, (p.index ?? 0) + 1);
 		const angle = p.orbitPhase ?? 0;
 		const ex = p.orbitEccentricity ?? 0;
 		const incl = p.orbitInclination ?? 0;
@@ -64,15 +79,12 @@ export class PlanetVisualizer {
 			0
 		);
 
-		// Position de la planète sur l’ellipse (dans le plan XZ)
-		const point = orbitCurve.getPoint(angle / (Math.PI * 2));
-		const x = point.x;
-		const z = point.y;
-
 		// Création de la planète
 		const textureLoader = new THREE.TextureLoader();
-		const texturePath = '/textures/' + p.type + '_planet.png';
-		const texture = textureLoader.load(texturePath);
+		const texturePath = '/textures/planet/' + p.type + '_planet.png';
+		const texture = textureLoader.load(texturePath, undefined, undefined, (err) => {
+			console.error("Error loading planet texture", texturePath, err);
+		});
 		const geom = new THREE.SphereGeometry(radiusScale, 32, 32);
 
 		// ShaderMaterial avec effet jour/nuit
@@ -112,9 +124,7 @@ export class PlanetVisualizer {
 			`,
 		});
 		const mesh = new THREE.Mesh(geom, mat);
-		// Place la planète sur l'orbite inclinée dès la création
-		const y = Math.sin(incl) * z * 0.1;
-		mesh.position.set(x, y, z);
+		mesh.position.set(0, 0, 0);
 		mesh.receiveShadow = true;
 
 		// Ligne d’orbite inclinée
@@ -125,32 +135,38 @@ export class PlanetVisualizer {
 			return new THREE.Vector3(px, py, pz);
 		});
 		const orbitGeom = new THREE.BufferGeometry().setFromPoints(orbitPoints);
-		const orbitMat = new THREE.LineBasicMaterial({ color: 0x444444, opacity: 0.25, transparent: true });
+		const orbitMat = new THREE.LineBasicMaterial({ color: 0xaaaaaa, opacity: 0.6, transparent: true });
 		const orbitLine = new THREE.LineLoop(orbitGeom, orbitMat);
 		orbitLine.visible = false;
 
-		// Groupe contenant planète + orbite
-		const orbitGroup = new THREE.Group();
-		orbitGroup.add(mesh);
-		orbitGroup.add(orbitLine);
+		// Groupe de translation
+		const translationGroup = new THREE.Group();
+		translationGroup.add(mesh);
 
-		// Lunes (non inclinées ici, à adapter si besoin)
+		// Orbites des lunes
+		const moonOrbitLines: THREE.Line[] = [];
+		(p.moons ?? []).forEach(moon => {
+			const mDistance = moon.distance ?? (radiusScale * 2 + 100);
+			const mCurve = new THREE.EllipseCurve(0, 0, mDistance, mDistance, 0, Math.PI * 2, false, 0);
+			const mPoints = mCurve.getPoints(64).map(pt => new THREE.Vector3(pt.x, 0, pt.y));
+			const mGeom = new THREE.BufferGeometry().setFromPoints(mPoints);
+			const mMat = new THREE.LineBasicMaterial({ color: 0x888888, opacity: 0.5, transparent: true });
+			const mLine = new THREE.LineLoop(mGeom, mMat);
+			mLine.visible = false;
+			translationGroup.add(mLine);
+			moonOrbitLines.push(mLine);
+		});
+
+		// Lunes (meshes)
 		const moons: THREE.Mesh[] = [];
 		(p.moons ?? []).forEach((moon) => {
 			const mGeom = new THREE.SphereGeometry(moon.size * 0.5, 16, 16);
 			const mMat = new THREE.MeshStandardMaterial({ color: moon.color ?? 0x999999, roughness: 0.9 });
 			const mMesh = new THREE.Mesh(mGeom, mMat);
-
-			const mDistance = moon.distance ?? (radiusScale * 2 + 100);
-			const mAngle = moon.orbitPhase ?? 0;
-			const mx = mesh.position.x + Math.cos(mAngle) * mDistance;
-			const mz = mesh.position.z + Math.sin(mAngle) * mDistance;
-			mMesh.position.set(mx, mesh.position.y, mz);
-
 			moons.push(mMesh);
 		});
 
-		return { mesh: orbitGroup, descriptor: p, orbitLine, moons };
+		return { mesh: translationGroup, planetSphere: mesh, descriptor: p, orbitLine, moons, moonOrbitLines };
 	}
 
 
@@ -159,15 +175,22 @@ export class PlanetVisualizer {
 	public update(elapsedTime: number, sunPosition?: THREE.Vector3) {
 		this.planets.forEach((planetObj) => {
 			const p = planetObj.descriptor;
-			const radiusScale = p.size * 50;
-			const baseDistance = 300;
-			const spacingFactor = 1.8; // espacement exponentiel
+			// Utiliser les mêmes paramètres que createPlanetMesh
+			const radiusScale = Math.max(p.size * 20, 5); 
+			const spacingFactor = 1.8;
+			
+			// Calculer la distance de base en fonction de la taille de l'étoile
+			const starVisualRadius = Math.max(2, this.starSize * 2);
+			const minBaseDistance = starVisualRadius * 4 + 100;
+			const baseDistance = Math.max(300, minBaseDistance);
 
-			const a = baseDistance * Math.pow(spacingFactor, p.index ?? 0) + radiusScale;
+			const a = baseDistance * Math.pow(spacingFactor, (p.index ?? 0) + 1);
 			const ex = p.orbitEccentricity ?? 0;
 			const b = a * (1 - ex);
 			const incl = p.orbitInclination ?? 0;
-			const angle = (elapsedTime * (p.orbitSpeed ?? 0.0001)) + (p.orbitPhase ?? 0);
+			
+			// Ralentir la vitesse orbitale (facteur 0.1)
+			const angle = (elapsedTime * (p.orbitSpeed ?? 0.0001) * 0.1) + (p.orbitPhase ?? 0);
 
 			// Orbite elliptique centrée sur le soleil
 			const x = a * Math.cos(angle);
@@ -177,41 +200,38 @@ export class PlanetVisualizer {
 			planetObj.mesh.position.set(x, y, z);
 
 			// Met à jour la position du soleil dans le shader
-			// Utilise la position du mesh du soleil du système
 			if (sunPosition) {
-				planetObj.mesh.traverse(obj => {
-					const meshObj = obj as THREE.Mesh;
-					if (
-						meshObj.material &&
-						(meshObj.material as any).uniforms &&
-						(meshObj.material as any).uniforms.sunPos
-					) {
-						(meshObj.material as any).uniforms.sunPos.value.set(sunPosition.x, sunPosition.y, sunPosition.z);
-					}
-				});
+				const mat = planetObj.planetSphere.material as THREE.ShaderMaterial;
+				if (mat.uniforms && mat.uniforms.sunPos) {
+					mat.uniforms.sunPos.value.set(sunPosition.x, sunPosition.y, sunPosition.z);
+				}
 			}
 
-			if (p.selfRotationSpeed) planetObj.mesh.rotation.y += p.selfRotationSpeed;
+			// Rotation sur elle-même (basée sur le temps et ralentie)
+			if (p.selfRotationSpeed) {
+				planetObj.planetSphere.rotation.y = elapsedTime * p.selfRotationSpeed * 0.1;
+			}
 
-			planetObj.mesh.lookAt(new THREE.Vector3(0, 0, 0));
+			// planetObj.mesh.lookAt(new THREE.Vector3(0, 0, 0)); // Désactivé pour ne pas perturber les orbites de lunes
 
 			(p.moons ?? []).forEach((moon, mi) => {
 				const mMesh = planetObj.moons[mi];
 				const mDistance = moon.distance ?? (radiusScale * 2 + 100);
-				const mAngle = (elapsedTime * (moon.orbitSpeed ?? 0.001)) + (moon.orbitPhase ?? 0);
-				const mx = planetObj.mesh.position.x + Math.cos(mAngle) * mDistance;
-				const mz = planetObj.mesh.position.z + Math.sin(mAngle) * mDistance;
-				mMesh.position.set(
-					Math.cos(mAngle) * mDistance + planetObj.mesh.position.x,
-					planetObj.mesh.position.y,
-					Math.sin(mAngle) * mDistance + planetObj.mesh.position.z
-				);
+				// Ralentir la vitesse orbitale des lunes
+				const mAngle = (elapsedTime * (moon.orbitSpeed ?? 0.001) * 0.5) + (moon.orbitPhase ?? 0);
+				// Position relative au groupe de translation (qui est déjà à la position de la planète)
+				const mx = Math.cos(mAngle) * mDistance;
+				const mz = Math.sin(mAngle) * mDistance;
+				mMesh.position.set(mx, 0, mz);
 			});
 		});
 	}
 
 	public toggleOrbits(visible: boolean) {
-		this.planets.forEach(p => p.orbitLine.visible = visible);
+		this.planets.forEach(p => {
+			p.orbitLine.visible = visible;
+			p.moonOrbitLines.forEach(l => l.visible = visible);
+		});
 	}
 
 	public dispose() {

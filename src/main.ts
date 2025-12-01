@@ -1,12 +1,15 @@
 // src/main.ts
 import * as THREE from 'three';
+import { SolarSystemDescriptor, GalaxyDescriptor } from './cosmos/types';
 import { OrbitControls } from './OrbitControls';
 import { Universe } from './universe';
 import { StarVisualizerCinematic } from './cosmos/StarVisualizerCinematic';
-import type { GalaxyDescriptor } from './cosmos/types';
+// import type { GalaxyDescriptor } from './cosmos/types';
 import { generateStar } from './cosmos/star';
 import { SolarSystem } from './cosmos/SolarSystem';
 import { mulberry32 } from './cosmos/prng';
+import { getSolarSystemExtremePoints } from './cosmos/getSolarSystemExtremePoints';
+
 
 // --- DOM ---
 const container = document.getElementById('app') as HTMLDivElement;
@@ -20,6 +23,7 @@ const galaxySystemsEl = document.getElementById('galaxy-systems') as HTMLElement
 const systemNameEl = document.getElementById('system-name') as HTMLElement;
 const systemCoordsEl = document.getElementById('system-coords') as HTMLElement;
 const systemSpectralEl = document.getElementById('system-spectral') as HTMLElement;
+const systemSizeEl = document.getElementById('system-size') as HTMLElement;
 const systemPlanetsEl = document.getElementById('system-planets') as HTMLElement;
 const systemPlanetListEl = document.getElementById('system-planet-list') as HTMLElement;
 
@@ -53,10 +57,15 @@ const universe = new Universe({ seed: Math.floor(Math.random() * 1e9), sizeRange
 seedEl.textContent = String(universe.seed);
 const originGalaxy = universe.getGalaxyAt({ x: 0, y: 0, z: 0 });
 displayGalaxyInfo(originGalaxy);
+//galNameEl.textContent = originGalaxy.id ?? 'unknown';
 const bg = universe.getBackgroundColorForGalaxy?.(originGalaxy) ?? [8, 10, 18];
 scene.background = new THREE.Color(`rgb(${bg[0]},${bg[1]},${bg[2]})`);
 let activeStarId: string | null = null;
 let currentSolarSystem: SolarSystem | null = null;
+
+
+
+
 
 // --- GalaxyLOD ---
 class GalaxyLOD {
@@ -131,15 +140,10 @@ class GalaxyLOD {
 		const galDistance = this.group.position.distanceTo(camPos);
 		const showStars = galDistance < this.galaxyDistanceThreshold;
 
-		// Points lointains
-		this.pointCloud.visible = showStars;
-
-		// étoiles proches
-		this.galaxyDescriptor.stars.forEach((star, index) => {
-			const starPos = new THREE.Vector3(star.position?.x ?? 0, star.position?.y ?? 0, star.position?.z ?? 0).multiplyScalar(this.scale);
-			const distance = starPos.distanceTo(camPos);
-
-			if (distance < this.starDistanceThreshold) {
+		if (showStars) {
+			// étoiles proches : on affiche les meshes et on cache le nuage de points
+			this.galaxyDescriptor.stars.forEach((star, index) => {
+				const starPos = new THREE.Vector3(star.position?.x ?? 0, star.position?.y ?? 0, star.position?.z ?? 0).multiplyScalar(this.scale);
 				let vis = this.starVisualizers.get(index);
 				if (!vis) {
 					vis = new StarVisualizerCinematic(star, { lodDistance: 600 });
@@ -148,15 +152,16 @@ class GalaxyLOD {
 					this.group.add(vis.mesh);
 				}
 				vis.mesh.visible = true;
-				vis.updateEffects(distance);
-				// masquer point lointain
-				this.pointCloud.visible = false;
-			} else {
-				const vis = this.starVisualizers.get(index);
-				if (vis) vis.mesh.visible = false;
-				if (this.starVisualizers.size > 0) this.pointCloud.visible = true;
-			}
-		});
+				// Correction: calcul de la distance en espace monde pour l'effet visuel
+				const worldStarPos = starPos.clone().add(this.group.position);
+				vis.updateEffects(worldStarPos.distanceTo(camPos));
+			});
+			this.pointCloud.visible = false;
+		} else {
+			// Points lointains : on affiche le nuage de points et on cache les meshes
+			this.pointCloud.visible = true;
+			this.starVisualizers.forEach(vis => vis.mesh.visible = false);
+		}
 	}
 
 	animate(time: number) {
@@ -173,22 +178,90 @@ class GalaxyLOD {
 const galaxyLODs: GalaxyLOD[] = [];
 const range = 1;
 (async function generateGalaxies() {
+	let firstGalaxyHelper: THREE.Box3Helper | null = null;
+	const placedAABBs: THREE.Box3[] = [];
+	const aabbScale = 0.15; // Réduit la taille des AABB
+	const spacing = 1.5; // Augmente l'espacement entre galaxies
+	let firstGalaxyOffset: THREE.Vector3 | null = null;
 	for (let x = -range; x <= range; x++) {
 		for (let y = -range; y <= range; y++) {
 			for (let z = -range; z <= range; z++) {
 				await new Promise(r => setTimeout(r, 1));
 				const gal = universe.getGalaxyAt({ x, y, z });
+				// Calculer la position proposée
+				const offset = new THREE.Vector3(x * gal.size * spacing, y * gal.size * spacing, z * gal.size * spacing);
+				// Calculer l'AABB déplacé et réduit
+				let min = new THREE.Vector3(gal._aabb!.min.x, gal._aabb!.min.y, gal._aabb!.min.z).multiplyScalar(aabbScale).add(offset);
+				let max = new THREE.Vector3(gal._aabb!.max.x, gal._aabb!.max.y, gal._aabb!.max.z).multiplyScalar(aabbScale).add(offset);
+				const box = new THREE.Box3(min, max);
+				// Vérifier le chevauchement
+				let overlaps = placedAABBs.some(aabb => aabb.intersectsBox(box));
+				if (overlaps) continue; // Refuser placement si chevauchement
+				placedAABBs.push(box);
+				// Placer la galaxie
 				const lod = new GalaxyLOD(gal);
-				lod.group.position.set(x * gal.size * 0.05, y * gal.size * 0.05, z * gal.size * 0.05);
+				lod.group.position.copy(offset);
 				scene.add(lod.group);
 				galaxyLODs.push(lod);
+				// Ajout du Box3Helper pour l'AABB de la galaxie
+				const color = (galaxyLODs.length === 1) ? 0xffa500 : 0x90ff90;
+				const helper = new THREE.Box3Helper(box, color);
+				scene.add(helper);
+				if (galaxyLODs.length === 1) {
+					firstGalaxyHelper = helper;
+					firstGalaxyOffset = offset.clone();
+				}
 			}
 		}
 	}
+	// Positionner la caméra près de la première galaxie
+	if (firstGalaxyOffset) {
+		camera.position.copy(firstGalaxyOffset.clone().add(new THREE.Vector3(0, 0, 2.5 * (galaxyLODs[0].galaxyDescriptor.size * aabbScale))));
+		controls.target.copy(firstGalaxyOffset);
+		controls.update();
+	}
+	// Affichage des AABB des systèmes solaires de la première galaxie
+	if (galaxyLODs.length > 0) {
+		const firstLOD = galaxyLODs[0];
+		const gal = firstLOD.galaxyDescriptor;
+		const offset = firstLOD.group.position;
+		for (const star of gal.stars) {
+			const starPos = new THREE.Vector3(star.position.x, star.position.y, star.position.z).multiplyScalar(0.05).add(offset);
+			
+			// Utiliser le rayon précalculé s'il existe, sinon recalculer
+			let radius = star.systemRadius;
+			if (!radius) {
+				// Fallback si systemRadius n'a pas été calculé (ne devrait pas arriver avec le nouveau code)
+				radius = 2000; 
+			}
+			
+			// Appliquer l'échelle de la galaxie (0.05) au rayon du système ?
+			
+			// Appliquer l'échelle de la galaxie (0.05) au rayon du système ?
+			// NON ! Le rayon du système est en unités locales du système solaire, qui sont affichées telles quelles quand on zoome.
+			// MAIS ici on affiche les AABB dans la vue galactique.
+			// Les systèmes solaires sont rendus via StarVisualizerCinematic qui a une taille fixe ou dépendante de la distance.
+			// Quand on entre dans un système, on change d'échelle.
+			// Si on veut visualiser la zone d'influence dans la galaxie, il faut savoir si l'échelle est cohérente.
+			// Dans GalaxyLOD, on multiplie la position par 0.05.
+			// Si on veut afficher la taille réelle du système dans la galaxie, il faut aussi multiplier le rayon par 0.05 ?
+			// Le problème est que 20000 unités * 0.05 = 1000 unités.
+			// Si les étoiles sont espacées de 1000 unités, ça va.
+			
+			// Dans generateGalaxy, on a utilisé les coordonnées brutes pour le check de collision.
+			// Donc star.systemRadius est en unités brutes de galaxie (qui sont les mêmes que les unités de système solaire dans ce modèle simplifié où tout est dans le même espace de coordonnées avant scaling).
+			
+			const scaledRadius = (radius || 500) * 0.05;
+			
+			const min = starPos.clone().subScalar(scaledRadius);
+			const max = starPos.clone().addScalar(scaledRadius);
+			
+			const box = new THREE.Box3(min, max);
+			const helper = new THREE.Box3Helper(box, 0x3399ff); // bleu
+			scene.add(helper);
+		}
+	}
 })();
-
-// --- Lighting ---
-scene.add(new THREE.AmbientLight(0xffffff, 0.1));
 
 // --- Resize ---
 window.addEventListener('resize', () => {
@@ -234,12 +307,39 @@ container.addEventListener('click', (event) => {
             return; // ← évite de traiter le clic comme un clic sur une étoile
         }
     }
+	// 🔍 Détection des planètes si un système est actif
+    if (currentSolarSystem) {
+		const solar = currentSolarSystem as SolarSystem;
 
-    // 🔭 Détection des étoiles
+        const planetMeshes: THREE.Object3D[] = solar.planetVisualizer.planets.map(p => p.mesh);
+        const planetIntersects = raycaster.intersectObjects(planetMeshes, true);
+
+        if (planetIntersects.length > 0) {
+            const target = planetIntersects[0].object;
+            const targetPos = target.getWorldPosition(new THREE.Vector3());
+            const distance = camera.position.distanceTo(targetPos);
+
+            if (distanceDisplay) {
+                distanceDisplay.textContent = `🪐 Distance à la planète : ${distance.toFixed(2)} unités`;
+            }
+
+            smoothCameraMove(targetPos);
+            console.log("🪐 Planète sélectionnée :", target.name ?? "inconnue");
+            return; // ← évite de traiter le clic comme un clic sur une étoile
+        }
+    }
+
+	// 🔭 Détection des étoiles
 	const allStarMeshes: THREE.Object3D[] = [];
 	galaxyLODs.forEach(lod => {
 		lod.starVisualizers.forEach(vis => {
-			if (vis.mesh.visible) allStarMeshes.push(vis.mesh);
+			if (vis.mesh.visible) {
+				allStarMeshes.push(vis.mesh);
+				// Ajoute explicitement le mesh du soleil (surfaceMeshTexture) pour le clic
+				if ((vis as any).surfaceMeshTexture) {
+					allStarMeshes.push((vis as any).surfaceMeshTexture);
+				}
+			}
 		});
 	});
 
@@ -258,10 +358,14 @@ container.addEventListener('click', (event) => {
 
 		// Récupérer l’étoile sélectionnée
 		const selectedStar = galaxyLODs.flatMap(lod => Array.from(lod.starVisualizers.values()))
-			.find(vis => vis.mesh === target || vis.mesh.children.includes(target));
+			.find(vis => vis.mesh === target || vis.mesh.children.includes(target) || (vis as any).surfaceMeshTexture === target);
 		console.log("Selected Star: ", selectedStar)
 		if (selectedStar) {
 			console.log("Selected Star: " + selectedStar)
+			// Nettoyer l'ancien système s'il existe
+			if (currentSolarSystem) {
+				currentSolarSystem.dispose();
+			}
 			const solarSystem = createSolarSystemFromStarVisualizer(selectedStar);
 			if (solarSystem) {
 				currentSolarSystem = solarSystem;
@@ -273,51 +377,7 @@ container.addEventListener('click', (event) => {
 	}
 });
 
-function createSolarSystemFromStarVisualizer(vis: StarVisualizerCinematic): SolarSystem | null {
-	console.log('🧪 Star descriptor:', vis.descriptor);
-	if (vis.descriptor.seed === undefined || vis.descriptor.index === undefined) return null;
-
-	const solarDescriptor = generateStar({
-		seed: vis.descriptor.seed,
-		index: vis.descriptor.index,
-		rng: vis.descriptor.rng ?? mulberry32(vis.descriptor.seed),
-		parentGalaxy: { size: 100000 }
-	});
-	solarDescriptor.position = vis.mesh.getWorldPosition(new THREE.Vector3());
-
-	const solarSystemDescriptor = {
-		id: `SS-${solarDescriptor.id}`,
-		name: `System-${solarDescriptor.id}`,
-		star: solarDescriptor,
-		planets: solarDescriptor.planets
-	};
-
-	const solarSystem = new SolarSystem(solarSystemDescriptor, { scene, showOrbits: true });
-	return solarSystem;
-}
-
-function moveCameraTo(position: THREE.Vector3) {
-	camera.position.copy(position.clone().add(new THREE.Vector3(0, 0, 500)));
-	controls.target.copy(position);
-}
-
-// --- Animation loop ---
-const clock = new THREE.Clock();
-function animate() {
-	requestAnimationFrame(animate);
-	const t = clock.getElapsedTime();
-	controls.update();
-	galaxyLODs.forEach(lod => {
-		lod.update(camera);
-		lod.animate(t);
-	});
-	renderer.render(scene, camera);
-}
-animate();
-
 // --- Debug ---
-(window as any).app = { renderer, scene, camera, universe, galaxyLODs };
-
 
 function displayGalaxyInfo(galaxy: GalaxyDescriptor) {
 	galaxyNameEl.textContent = galaxy.id ?? '—';
@@ -325,16 +385,18 @@ function displayGalaxyInfo(galaxy: GalaxyDescriptor) {
 	galaxyTypeEl.textContent = galaxy.type ?? '—';
 	galaxySystemsEl.textContent = galaxy.numSystems?.toString() ?? '—';
 }
+(window as any).app = { renderer, scene, camera, universe, galaxyLODs };
 
 function displaySystemInfo(system: SolarSystemDescriptor) {
 	systemNameEl.textContent = system.name ?? '—';
 	systemCoordsEl.textContent = `${system.star.position?.x?.toFixed(0) ?? 0}, ${system.star.position?.y?.toFixed(0) ?? 0}, ${system.star.position?.z?.toFixed(0) ?? 0}`;
 	systemSpectralEl.textContent = system.star.spectralClass ?? '—';
+	systemSizeEl.textContent = system.star.size?.toFixed(2) ?? '—';
 	systemPlanetsEl.textContent = system.planets?.length?.toString() ?? '—';
 	systemPlanetListEl.innerHTML = '';
-	system.planets.forEach((p, i) => {
+	system.planets.forEach((p: import('./cosmos/types').PlanetDescriptor, i: number) => {
 		const li = document.createElement('li');
-		li.textContent = `${p.name ?? 'Planète-' + (i + 1)} — ${p.type} — distance: ${p.distance?.toFixed(0) ?? '—'}`;
+		li.textContent = `${p.name ?? 'Planète-' + (i + 1)} — ${p.type} — distance: ${p.distance?.toFixed(0) ?? '—'}  — size: ${p.size}`;
 		systemPlanetListEl.appendChild(li);
 	});
 }
@@ -359,6 +421,72 @@ function clearPlanetInfo() {
 	planetMoonsEl.textContent = '—';
 }
 
+// --- Lighting ---
+scene.add(new THREE.AmbientLight(0xffffff, 0.1));
+
+function createSolarSystemFromStarVisualizer(vis: StarVisualizerCinematic): SolarSystem | null {
+	console.log('🧪 Star descriptor:', vis.descriptor);
+	if (vis.descriptor.seed === undefined || vis.descriptor.index === undefined) return null;
+
+	const solarDescriptor = generateStar({
+		seed: vis.descriptor.seed,
+		index: vis.descriptor.index,
+		// IMPORTANT : Toujours recréer un RNG frais basé sur la graine pour garantir le déterminisme.
+		// Si on réutilise vis.descriptor.rng, son état a avancé et on obtient des résultats différents à chaque clic.
+		rng: mulberry32(vis.descriptor.seed),
+		parentGalaxy: { size: 100000 }
+	});
+	solarDescriptor.position = vis.mesh.getWorldPosition(new THREE.Vector3());
+
+	const solarSystemDescriptor = {
+		id: `SS-${solarDescriptor.id}`,
+		name: `System-${solarDescriptor.id}`,
+		star: solarDescriptor,
+		planets: solarDescriptor.planets
+	};
+
+	const solarSystem = new SolarSystem(solarSystemDescriptor, { scene, showOrbits: true, scale: 0.05 });
+	return solarSystem;
+}
+
+function moveCameraTo(position: THREE.Vector3) {
+	camera.position.copy(position.clone().add(new THREE.Vector3(0, 0, 500)));
+	controls.target.copy(position);
+}
+
+// --- Animation loop ---
+const clock = new THREE.Clock();
+function animate() {
+	requestAnimationFrame(animate);
+	const t = clock.getElapsedTime();
+	controls.update();
+	galaxyLODs.forEach(lod => {
+		lod.update(camera);
+		lod.animate(t);
+	});
+	if (currentSolarSystem) {
+		currentSolarSystem.update(t, camera.position);
+	}
+	renderer.render(scene, camera);
+}
+animate();
+
+// --- Debug ---
+(window as any).app = { renderer, scene, camera, universe, galaxyLODs };
+
+function displayPlanetDebug(system: SolarSystem) {
+	const descriptor = system.getDescriptor();
+	const list = document.getElementById('planetList');
+	if (!list) return;
+
+	list.innerHTML = '';
+	descriptor.planets.forEach((p, i) => {
+		const li = document.createElement('li');
+		li.textContent = `${p.name ?? 'Planète-' + (i + 1)} — ${p.type} — taille: ${p.size.toFixed(2)} — distance: ${p.distance.toFixed(0)}`;
+		list.appendChild(li);
+	});
+}
+
 function smoothCameraMove(target: THREE.Vector3, duration = 2) {
 	const startPos = camera.position.clone();
 	const endPos = target.clone().add(new THREE.Vector3(0, 0, 500));
@@ -378,3 +506,4 @@ function smoothCameraMove(target: THREE.Vector3, duration = 2) {
 	};
 	animateMove();
 }
+

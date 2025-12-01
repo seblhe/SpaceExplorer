@@ -16,10 +16,24 @@ export function generateStar(opts: {
   const spectralClasses: StarDescriptor['spectralClass'][] = ['O', 'B', 'A', 'F', 'G', 'K', 'M'];
   const spectralClass = spectralClasses[Math.floor(rng() * spectralClasses.length)];
 
-  // Taille et luminosité cohérentes
-  const size = Math.max(0.5, rng() * 4 + 0.5); // en unités arbitraires
-  const luminosity = Math.pow(size, 3); // simplifié pour la cohérence visuelle
-  const mass = size * 2; // proportionnelle à la taille
+  // Taille basée sur la classe spectrale (Rayon relatif au Soleil ~1.0)
+  // O: > 6.6, B: 1.8-6.6, A: 1.4-1.8, F: 1.15-1.4, G: 0.96-1.15, K: 0.7-0.96, M: < 0.7
+  // Ajusté pour éviter des étoiles trop énormes visuellement
+  const sizeRanges: Record<string, [number, number]> = {
+    O: [4.0, 6.0], // Réduit de [6.6, 15.0]
+    B: [2.5, 4.0], // Réduit de [1.8, 6.6]
+    A: [1.8, 2.5],
+    F: [1.2, 1.8],
+    G: [0.9, 1.2],
+    K: [0.6, 0.9],
+    M: [0.3, 0.6]
+  };
+  const range = sizeRanges[spectralClass] ?? [0.5, 5.0];
+  const size = range[0] + rng() * (range[1] - range[0]);
+
+  // Luminosité approximative (L ~ R^2 * T^4), ici simplifié
+  const luminosity = Math.pow(size, 3); 
+  const mass = size * 2; // proportionnelle à la taille (simplifié)
 
   // Position 3D dans la galaxie
   const position = {
