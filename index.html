@@ -5,81 +5,86 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Procedural Space Universe (Vite + Three + TS)</title>
-    <style>
-        html,
-        body,
-        #app {
-            height: 100%;
-            margin: 0;
-            background: #000;
-        }
-        
-        #ui {
-            position: absolute;
-            right: 12px;
-            top: 12px;
-            z-index: 10;
-            color: white;
-            font-family: system-ui, -apple-system, Roboto, "Segoe UI", sans-serif;
-            user-select: none;
-            background: rgba(0, 0, 0, 0.25);
-            padding: 8px;
-            border-radius: 8px;
-        }
-        
-        button {
-            margin: 4px;
-        }
-        
-        .muted {
-            color: #bbb;
-            font-size: 0.85rem;
-        }
-        
-        #distanceDisplay {
-            position: absolute;
-            left: 12px;
-            bottom: 12px;
-            z-index: 10;
-            color: white;
-            font-family: system-ui, -apple-system, Roboto, "Segoe UI", sans-serif;
-            background: rgba(0, 0, 0, 0.25);
-            padding: 8px;
-            border-radius: 8px;
-            font-size: 0.9rem;
-        }
-    </style>
 </head>
 
 <body>
     <div id="app"></div>
 
-    <div id="ui">
-        <div>Seed: <span id="seed">—</span></div>
-        <div style="margin-top:6px;">
-            <button id="zoomIn">Zoom In</button>
-            <button id="zoomOut">Zoom Out</button>
-            <button id="toggleRotate">Toggle rotate</button>
+    <!-- HUD INTERFACE -->
+    <div id="game-ui">
+
+        <!-- TOP LEFT: GALAXY INFO -->
+        <div class="hud-panel top-left">
+            <div class="panel-header">
+                <span class="icon">🌌</span> SYSTEME DE NAVIGATION
+            </div>
+            <div class="panel-content">
+                <div class="data-row"><span class="label">GALAXIE:</span> <span id="hud-galaxy-name" class="value">--</span></div>
+                <div class="data-row"><span class="label">TYPE:</span> <span id="hud-galaxy-type" class="value">--</span></div>
+                <div class="data-row"><span class="label">SYSTEMES:</span> <span id="hud-galaxy-systems" class="value">--</span></div>
+                <div class="data-row"><span class="label">COORD:</span> <span id="hud-coords" class="value">0, 0, 0</span></div>
+            </div>
         </div>
-        <!-- Infos galaxie -->
-        <div id="galaxyInfo" class="muted" style="margin-top:10px;">
-            <strong>🌌 Galaxie</strong><br> Nom : <span id="galaxy-name">—</span><br> Coordonnées : <span id="galaxy-coords">—</span><br> Type : <span id="galaxy-type">—</span><br> Systèmes : <span id="galaxy-systems">—</span>
+
+        <!-- BOTTOM LEFT: NEARBY SYSTEMS -->
+        <div class="hud-panel bottom-left">
+            <div class="panel-header">
+                <span class="icon">📡</span> SCANNER DE PROXIMITÉ
+            </div>
+            <div class="panel-content" id="hud-nearby-list">
+                <!-- List items will be injected here -->
+                <div class="list-item">Scan en cours...</div>
+            </div>
         </div>
-        <!-- Infos système solaire -->
-        <div id="systemInfo" class="muted" style="margin-top:10px;">
-            <strong>☀️ Système solaire</strong><br> Nom : <span id="system-name">—</span><br> Coordonnées : <span id="system-coords">—</span><br> Spectral : <span id="system-spectral">—</span><br> Taille : <span id="system-size">—</span><br> Planètes
-            : <span id="system-planets">—</span><br>
-            <ul id="system-planet-list" style="padding-left: 16px; margin: 4px 0;"></ul>
-        </div>
-        <!-- Infos planète -->
-        <div id="planetInfo" class="muted" style="margin-top:10px;">
-            <strong>🪐 Planète</strong><br> Nom : <span id="planet-name">—</span><br> Type : <span id="planet-type">—</span><br> Distance au soleil : <span id="planet-distance">—</span><br> Biome : <span id="planet-biome">—</span><br> Gravité :
-            <span id="planet-gravity">—</span><br> Atmosphère : <span id="planet-atmosphere">—</span><br> Lunes : <span id="planet-moons">—</span>
+
+        <!-- RIGHT: CONTEXTUAL INFO (System / Planet) -->
+        <div class="hud-panel right-panel">
+            <div class="panel-header">
+                <span class="icon">🔭</span> ANALYSEUR
+            </div>
+
+            <!-- SYSTEM INFO SECTION -->
+            <div id="hud-system-info" class="info-section">
+                <div class="section-title">SYSTÈME SOLAIRE</div>
+                <div class="data-row"><span class="label">NOM:</span> <span id="hud-system-name" class="value">--</span></div>
+                <div class="data-row"><span class="label">ETOILE:</span> <span id="hud-system-star" class="value">--</span></div>
+                <div class="data-row"><span class="label">PLANETES:</span> <span id="hud-system-planets" class="value">--</span></div>
+            </div>
+
+            <div class="separator"></div>
+
+            <!-- PLANET INFO SECTION -->
+            <div id="hud-planet-info" class="info-section hidden">
+                <div class="section-title">CIBLE VERROUILLÉE</div>
+                <div class="planet-visual" id="hud-planet-visual"></div>
+                <div class="data-row large"><span id="hud-planet-name" class="value highlight">--</span></div>
+                <div class="data-row"><span class="label">TYPE:</span> <span id="hud-planet-type" class="value">--</span></div>
+                <div class="data-row"><span class="label">BIOME:</span> <span id="hud-planet-biome" class="value">--</span></div>
+                <div class="data-row"><span class="label">TEMP:</span> <span id="hud-planet-temp" class="value">--</span></div>
+                <div class="data-row"><span class="label">GRAVITÉ:</span> <span id="hud-planet-gravity" class="value">--</span></div>
+
+                <div class="sub-section">RESSOURCES</div>
+                <div class="resource-bar">
+                    <span class="label">Métaux</span>
+                    <div class="bar-container">
+                        <div id="res-metal-bar" class="bar" style="width: 0%"></div>
+                    </div>
+                </div>
+                <div class="resource-bar">
+                    <span class="label">Gaz</span>
+                    <div class="bar-container">
+                        <div id="res-gas-bar" class="bar" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="hud-no-target" class="info-section">
+                <div class="status-text">AUCUNE CIBLE</div>
+            </div>
         </div>
     </div>
 
-    <div id="distanceDisplay">📏 Distance à la caméra : —</div>
-
+    <div id="seed-container">SEED: <span id="seed"></span></div>
     <script type="module" src="/src/main.ts"></script>
 </body>
 

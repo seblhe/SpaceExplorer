@@ -12,7 +12,10 @@ export function generateGalaxy({ seed = 1, cell = { x: 0, y: 0, z: 0 }, opts = {
 	const size = Math.round(lerp(opts.sizeMin ?? 40000, opts.sizeMax ?? 300000, local()));
 	const age = Math.round(lerp(2e9, 13.5e9, local()));
 
-	const numSystems = Math.max(10, Math.floor((size / 2000) * lerp(0.1, 0.5, local())));
+	// Augmentation significative du nombre de systèmes
+	// Avant : size / 2000 * 0.1..0.5 -> ~20 systèmes
+	// Maintenant : size / 300 * 0.5..1.5 -> ~100 à 1500 systèmes
+	const numSystems = Math.max(100, Math.floor((size / 300) * lerp(0.5, 1.5, local())));
 
 	const stars: StarDescriptor[] = [];
 	const placedStars: { position: { x: number; y: number; z: number }, radius: number }[] = [];

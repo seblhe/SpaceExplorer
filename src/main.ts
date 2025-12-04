@@ -1,4 +1,4 @@
-// src/main.ts
+import './style.css';
 import * as THREE from 'three';
 import { SolarSystemDescriptor, GalaxyDescriptor } from './cosmos/types';
 import { OrbitControls } from './OrbitControls';
@@ -10,30 +10,36 @@ import { SolarSystem } from './cosmos/SolarSystem';
 import { mulberry32 } from './cosmos/prng';
 import { getSolarSystemExtremePoints } from './cosmos/getSolarSystemExtremePoints';
 
+// Flags de debug
+const SHOW_GALAXY_AABB = false;
+const SHOW_SYSTEM_AABB = false;
 
 // --- DOM ---
 const container = document.getElementById('app') as HTMLDivElement;
 const seedEl = document.getElementById('seed') as HTMLElement;
-// Nouveaux éléments pour l'affichage structuré
-const galaxyNameEl = document.getElementById('galaxy-name') as HTMLElement;
-const galaxyCoordsEl = document.getElementById('galaxy-coords') as HTMLElement;
-const galaxyTypeEl = document.getElementById('galaxy-type') as HTMLElement;
-const galaxySystemsEl = document.getElementById('galaxy-systems') as HTMLElement;
 
-const systemNameEl = document.getElementById('system-name') as HTMLElement;
-const systemCoordsEl = document.getElementById('system-coords') as HTMLElement;
-const systemSpectralEl = document.getElementById('system-spectral') as HTMLElement;
-const systemSizeEl = document.getElementById('system-size') as HTMLElement;
-const systemPlanetsEl = document.getElementById('system-planets') as HTMLElement;
-const systemPlanetListEl = document.getElementById('system-planet-list') as HTMLElement;
+// --- HUD ELEMENTS ---
+const hudGalaxyName = document.getElementById('hud-galaxy-name') as HTMLElement;
+const hudGalaxyType = document.getElementById('hud-galaxy-type') as HTMLElement;
+const hudGalaxySystems = document.getElementById('hud-galaxy-systems') as HTMLElement;
+const hudCoords = document.getElementById('hud-coords') as HTMLElement;
+const hudNearbyList = document.getElementById('hud-nearby-list') as HTMLElement;
 
-const planetNameEl = document.getElementById('planet-name') as HTMLElement;
-const planetTypeEl = document.getElementById('planet-type') as HTMLElement;
-const planetDistanceEl = document.getElementById('planet-distance') as HTMLElement;
-const planetBiomeEl = document.getElementById('planet-biome') as HTMLElement;
-const planetGravityEl = document.getElementById('planet-gravity') as HTMLElement;
-const planetAtmosphereEl = document.getElementById('planet-atmosphere') as HTMLElement;
-const planetMoonsEl = document.getElementById('planet-moons') as HTMLElement;
+const hudSystemInfo = document.getElementById('hud-system-info') as HTMLElement;
+const hudSystemName = document.getElementById('hud-system-name') as HTMLElement;
+const hudSystemStar = document.getElementById('hud-system-star') as HTMLElement;
+const hudSystemPlanets = document.getElementById('hud-system-planets') as HTMLElement;
+
+const hudPlanetInfo = document.getElementById('hud-planet-info') as HTMLElement;
+const hudPlanetName = document.getElementById('hud-planet-name') as HTMLElement;
+const hudPlanetType = document.getElementById('hud-planet-type') as HTMLElement;
+const hudPlanetBiome = document.getElementById('hud-planet-biome') as HTMLElement;
+const hudPlanetTemp = document.getElementById('hud-planet-temp') as HTMLElement;
+const hudPlanetGravity = document.getElementById('hud-planet-gravity') as HTMLElement;
+const hudNoTarget = document.getElementById('hud-no-target') as HTMLElement;
+
+const resMetalBar = document.getElementById('res-metal-bar') as HTMLElement;
+const resGasBar = document.getElementById('res-gas-bar') as HTMLElement;
 
 // --- Renderer ---
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -87,6 +93,19 @@ class GalaxyLOD {
 		this.group = new THREE.Group();
 		this.group.name = `galaxy-${galaxyDescriptor.id}`;
 		this.buildPointCloud();
+
+		if (SHOW_GALAXY_AABB && galaxyDescriptor._aabb) {
+			const min = galaxyDescriptor._aabb.min;
+			const max = galaxyDescriptor._aabb.max;
+			const width = (max.x - min.x) * this.scale;
+			const height = (max.y - min.y) * this.scale;
+			const depth = (max.z - min.z) * this.scale;
+			
+			const boxGeom = new THREE.BoxGeometry(width, height, depth);
+			const boxMat = new THREE.LineBasicMaterial({ color: 0x00ff00, opacity: 0.3, transparent: true });
+			const box = new THREE.LineSegments(new THREE.EdgesGeometry(boxGeom), boxMat);
+			this.group.add(box);
+		}
 	}
 
 	private buildPointCloud() {
@@ -112,12 +131,12 @@ class GalaxyLOD {
 		this.dynamicPointsGeom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
 		this.dynamicPointsMat = new THREE.PointsMaterial({
-			size: 1.5,
+			size: 3.0, // Taille fixe en pixels
 			vertexColors: true,
 			transparent: true,
-			opacity: 0.95,
+			opacity: 1.0,
 			depthWrite: false,
-			sizeAttenuation: true
+			sizeAttenuation: false // Désactivé pour que les étoiles soient visibles de loin
 		});
 
 		this.pointCloud = new THREE.Points(this.dynamicPointsGeom, this.dynamicPointsMat);
@@ -140,28 +159,42 @@ class GalaxyLOD {
 	update(camera: THREE.Camera) {
 		const camPos = camera.position;
 		const galDistance = this.group.position.distanceTo(camPos);
-		const showStars = galDistance < this.galaxyDistanceThreshold;
+		
+		// On garde toujours le nuage de points visible pour l'effet "étoiles lointaines"
+		this.pointCloud.visible = true;
 
-		if (showStars) {
-			// étoiles proches : on affiche les meshes et on cache le nuage de points
+		// On n'active les meshes 3D que si on est vraiment DANS la galaxie
+		// Seuil ajusté pour correspondre à la taille de la galaxie
+		const insideGalaxyThreshold = this.galaxyDescriptor.size * this.scale * 1.2;
+		const insideGalaxy = galDistance < insideGalaxyThreshold;
+
+		if (insideGalaxy) {
+			// étoiles proches : on affiche les meshes SEULEMENT si elles sont proches de la caméra
 			this.galaxyDescriptor.stars.forEach((star, index) => {
 				const starPos = new THREE.Vector3(star.position?.x ?? 0, star.position?.y ?? 0, star.position?.z ?? 0).multiplyScalar(this.scale);
-				let vis = this.starVisualizers.get(index);
-				if (!vis) {
-					vis = new StarVisualizerCinematic(star, { lodDistance: 600 });
-					vis.mesh.position.copy(starPos);
-					this.starVisualizers.set(index, vis);
-					this.group.add(vis.mesh);
-				}
-				vis.mesh.visible = true;
-				// Correction: calcul de la distance en espace monde pour l'effet visuel
 				const worldStarPos = starPos.clone().add(this.group.position);
-				vis.updateEffects(worldStarPos.distanceTo(camPos));
+				const distToStar = worldStarPos.distanceTo(camPos);
+
+				// Distance d'activation du mesh (ex: 2000 unités)
+				// Cela évite d'afficher 4000 meshes invisibles
+				if (distToStar < 2000) {
+					let vis = this.starVisualizers.get(index);
+					if (!vis) {
+						vis = new StarVisualizerCinematic(star, { lodDistance: 600 });
+						vis.mesh.position.copy(starPos);
+						this.starVisualizers.set(index, vis);
+						this.group.add(vis.mesh);
+					}
+					vis.mesh.visible = true;
+					vis.updateEffects(distToStar);
+				} else {
+					// Si trop loin, on cache le mesh (le point du nuage prend le relais)
+					const vis = this.starVisualizers.get(index);
+					if (vis) vis.mesh.visible = false;
+				}
 			});
-			this.pointCloud.visible = false;
 		} else {
-			// Points lointains : on affiche le nuage de points et on cache les meshes
-			this.pointCloud.visible = true;
+			// Hors de la galaxie : on cache tous les meshes
 			this.starVisualizers.forEach(vis => vis.mesh.visible = false);
 		}
 	}
@@ -206,11 +239,15 @@ const range = 1;
 				scene.add(lod.group);
 				galaxyLODs.push(lod);
 				// Ajout du Box3Helper pour l'AABB de la galaxie
-				const color = (galaxyLODs.length === 1) ? 0xffa500 : 0x90ff90;
-				const helper = new THREE.Box3Helper(box, color);
-				scene.add(helper);
+				if (SHOW_GALAXY_AABB) {
+					const color = (galaxyLODs.length === 1) ? 0xffa500 : 0x90ff90;
+					const helper = new THREE.Box3Helper(box, color);
+					scene.add(helper);
+					if (galaxyLODs.length === 1) {
+						firstGalaxyHelper = helper;
+					}
+				}
 				if (galaxyLODs.length === 1) {
-					firstGalaxyHelper = helper;
 					firstGalaxyOffset = offset.clone();
 				}
 			}
@@ -223,7 +260,7 @@ const range = 1;
 		controls.update();
 	}
 	// Affichage des AABB des systèmes solaires de la première galaxie
-	if (galaxyLODs.length > 0) {
+	if (SHOW_SYSTEM_AABB && galaxyLODs.length > 0) {
 		const firstLOD = galaxyLODs[0];
 		const gal = firstLOD.galaxyDescriptor;
 		const offset = firstLOD.group.position;
@@ -293,12 +330,7 @@ container.addEventListener('click', (event) => {
         if (planetIntersects.length > 0) {
             const target = planetIntersects[0].object;
             const targetPos = target.getWorldPosition(new THREE.Vector3());
-            const distance = camera.position.distanceTo(targetPos);
-
-            if (distanceDisplay) {
-                distanceDisplay.textContent = `🪐 Distance à la planète : ${distance.toFixed(2)} unités`;
-            }
-
+            
             smoothCameraMove(targetPos);
             console.log("🪐 Planète sélectionnée :", target.name ?? "inconnue");
 			   // Trouver la planète sélectionnée (mesh ou enfant)
@@ -382,45 +414,57 @@ container.addEventListener('click', (event) => {
 // --- Debug ---
 
 function displayGalaxyInfo(galaxy: GalaxyDescriptor) {
-	galaxyNameEl.textContent = galaxy.id ?? '—';
-	galaxyCoordsEl.textContent = `${galaxy.positionCell?.x ?? 0}, ${galaxy.positionCell?.y ?? 0}, ${galaxy.positionCell?.z ?? 0}`;
-	galaxyTypeEl.textContent = galaxy.type ?? '—';
-	galaxySystemsEl.textContent = galaxy.numSystems?.toString() ?? '—';
+	hudGalaxyName.textContent = galaxy.id ?? '—';
+	hudCoords.textContent = `${galaxy.positionCell?.x ?? 0}, ${galaxy.positionCell?.y ?? 0}, ${galaxy.positionCell?.z ?? 0}`;
+	hudGalaxyType.textContent = galaxy.type ?? '—';
+	hudGalaxySystems.textContent = galaxy.numSystems?.toString() ?? '—';
 }
 (window as any).app = { renderer, scene, camera, universe, galaxyLODs };
 
 function displaySystemInfo(system: SolarSystemDescriptor) {
-	systemNameEl.textContent = system.name ?? '—';
-	systemCoordsEl.textContent = `${system.star.position?.x?.toFixed(0) ?? 0}, ${system.star.position?.y?.toFixed(0) ?? 0}, ${system.star.position?.z?.toFixed(0) ?? 0}`;
-	systemSpectralEl.textContent = system.star.spectralClass ?? '—';
-	systemSizeEl.textContent = system.star.size?.toFixed(2) ?? '—';
-	systemPlanetsEl.textContent = system.planets?.length?.toString() ?? '—';
-	systemPlanetListEl.innerHTML = '';
-	system.planets.forEach((p: import('./cosmos/types').PlanetDescriptor, i: number) => {
-		const li = document.createElement('li');
-		li.textContent = `${p.name ?? 'Planète-' + (i + 1)} — ${p.type} — distance: ${p.distance?.toFixed(0) ?? '—'}  — size: ${p.size}`;
-		systemPlanetListEl.appendChild(li);
-	});
+	hudSystemName.textContent = system.name ?? '—';
+	hudSystemStar.textContent = `${system.star.spectralClass} (Size: ${system.star.size?.toFixed(2)})`;
+	hudSystemPlanets.textContent = system.planets?.length?.toString() ?? '—';
+	
+	// Afficher le panneau système
+	hudSystemInfo.classList.remove('hidden');
+	hudNoTarget.classList.add('hidden');
 }
 
 function displayPlanetInfo(planet: import('./cosmos/types').PlanetDescriptor) {
-	planetNameEl.textContent = planet.name ?? '—';
-	planetTypeEl.textContent = planet.type ?? '—';
-	planetDistanceEl.textContent = planet.distance?.toFixed(0) ?? '—';
-	planetBiomeEl.textContent = planet.biome ?? '—';
-	planetGravityEl.textContent = planet.gravityG?.toFixed(2) ?? '—';
-	planetAtmosphereEl.textContent = planet.atmosphere ?? '—';
-	planetMoonsEl.textContent = (planet.moons?.map(m => m.id).join(', ') || '—');
+	hudPlanetInfo.classList.remove('hidden');
+	hudSystemInfo.classList.add('hidden');
+	hudNoTarget.classList.add('hidden');
+
+	hudPlanetName.textContent = planet.name ?? '—';
+	hudPlanetType.textContent = planet.type ?? '—';
+	hudPlanetBiome.textContent = planet.biome ?? '—';
+	hudPlanetTemp.textContent = planet.temperature ? `${planet.temperature} K` : '—';
+	hudPlanetGravity.textContent = planet.gravityG != null ? planet.gravityG.toFixed(2) + ' G' : '—';
+	
+	// Ressources
+	const metals = planet.resources?.metals ?? 0;
+	const gas = planet.resources?.gas ?? 0;
+	// Normalisation approximative pour l'affichage (0-1000 -> 0-100%)
+	resMetalBar.style.width = Math.min(100, metals / 10) + '%';
+	resGasBar.style.width = Math.min(100, gas / 10) + '%';
+	
+	// Visuel (couleur simple pour l'instant)
+	const visual = document.getElementById('hud-planet-visual');
+	if (visual) {
+		visual.style.backgroundColor = planet.color ?? '#555';
+		visual.style.boxShadow = `0 0 20px ${planet.color ?? '#555'}`;
+	}
 }
 
 function clearPlanetInfo() {
-	planetNameEl.textContent = '—';
-	planetTypeEl.textContent = '—';
-	planetDistanceEl.textContent = '—';
-	planetBiomeEl.textContent = '—';
-	planetGravityEl.textContent = '—';
-	planetAtmosphereEl.textContent = '—';
-	planetMoonsEl.textContent = '—';
+	hudPlanetInfo.classList.add('hidden');
+	// Si on a un système actif, on le réaffiche
+	if (currentSolarSystem) {
+		hudSystemInfo.classList.remove('hidden');
+	} else {
+		hudNoTarget.classList.remove('hidden');
+	}
 }
 
 // --- Lighting ---
@@ -447,7 +491,12 @@ function createSolarSystemFromStarVisualizer(vis: StarVisualizerCinematic): Sola
 		planets: solarDescriptor.planets
 	};
 
-	const solarSystem = new SolarSystem(solarSystemDescriptor, { scene, showOrbits: true, scale: 0.05 });
+	const solarSystem = new SolarSystem(solarSystemDescriptor, { 
+		scene, 
+		showOrbits: true, 
+		scale: 0.05,
+		showAABB: SHOW_SYSTEM_AABB
+	});
 	return solarSystem;
 }
 
@@ -458,10 +507,19 @@ function moveCameraTo(position: THREE.Vector3) {
 
 // --- Animation loop ---
 const clock = new THREE.Clock();
+let lastHudUpdate = 0;
+
 function animate() {
 	requestAnimationFrame(animate);
 	const t = clock.getElapsedTime();
 	controls.update();
+	
+	// Mise à jour HUD (toutes les 0.5s pour ne pas surcharger)
+	if (t - lastHudUpdate > 0.5) {
+		updateHUD(camera.position);
+		lastHudUpdate = t;
+	}
+
 	galaxyLODs.forEach(lod => {
 		lod.update(camera);
 		lod.animate(t);
@@ -472,6 +530,54 @@ function animate() {
 	renderer.render(scene, camera);
 }
 animate();
+
+// --- HUD Logic ---
+function updateHUD(camPos: THREE.Vector3) {
+	// 1. Trouver la galaxie la plus proche
+	let closestGalaxyLOD: GalaxyLOD | null = null;
+	let minGalDist = Infinity;
+
+	galaxyLODs.forEach(lod => {
+		const dist = lod.group.position.distanceTo(camPos);
+		if (dist < minGalDist) {
+			minGalDist = dist;
+			closestGalaxyLOD = lod;
+		}
+	});
+
+	if (closestGalaxyLOD) {
+		const gal = (closestGalaxyLOD as GalaxyLOD).galaxyDescriptor;
+		displayGalaxyInfo(gal);
+		
+		// 2. Trouver les étoiles proches dans cette galaxie
+		const stars = gal.stars;
+		const galaxyPos = (closestGalaxyLOD as GalaxyLOD).group.position;
+		
+		// Calculer les distances
+		const nearbyStars = stars.map(s => {
+			const sPos = new THREE.Vector3(s.position.x, s.position.y, s.position.z).multiplyScalar(0.05).add(galaxyPos);
+			return {
+				star: s,
+				dist: sPos.distanceTo(camPos)
+			};
+		})
+		.sort((a, b) => a.dist - b.dist)
+		.slice(0, 5); // Top 5
+
+		// Mettre à jour la liste
+		hudNearbyList.innerHTML = '';
+		nearbyStars.forEach(item => {
+			const div = document.createElement('div');
+			div.className = 'list-item';
+			div.innerHTML = `<span>⭐ ${item.star.spectralClass}-Class</span> <span class="dist">${item.dist.toFixed(0)}u</span>`;
+			div.onclick = () => {
+				const sPos = new THREE.Vector3(item.star.position.x, item.star.position.y, item.star.position.z).multiplyScalar(0.05).add(galaxyPos);
+				smoothCameraMove(sPos);
+			};
+			hudNearbyList.appendChild(div);
+		});
+	}
+}
 
 // --- Debug ---
 (window as any).app = { renderer, scene, camera, universe, galaxyLODs };

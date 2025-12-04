@@ -2,9 +2,11 @@ import * as THREE from 'three';
 import type { SolarSystemDescriptor } from './types';
 import { StarVisualizerCinematic } from './StarVisualizerCinematic';
 import { PlanetVisualizer } from './PlanetVisualizer';
+import { getSolarSystemExtremePoints } from './getSolarSystemExtremePoints';
 
 export interface SolarSystemOptions {
 	showOrbits?: boolean;
+	showAABB?: boolean;
 	scene: THREE.Scene;
 	scale?: number;
 }
@@ -13,10 +15,19 @@ export class SolarSystem {
 	public starVisualizer: StarVisualizerCinematic;
 	public planetVisualizer: PlanetVisualizer;
 	private descriptor: SolarSystemDescriptor;
+	private aabbHelper?: THREE.Box3Helper;
 
 	constructor(descriptor: SolarSystemDescriptor, opts: SolarSystemOptions) {
 		//console.log("SolarSystem constructor")
 		this.descriptor = descriptor;
+
+		// ---- AABB ----
+		if (opts.showAABB) {
+			const points = getSolarSystemExtremePoints(descriptor.star);
+			const box = new THREE.Box3().setFromPoints(points);
+			this.aabbHelper = new THREE.Box3Helper(box, 0xffff00);
+			opts.scene.add(this.aabbHelper);
+		}
 
 		// ---- Soleil ----
 		this.starVisualizer = new StarVisualizerCinematic(descriptor.star, {
@@ -74,6 +85,11 @@ export class SolarSystem {
 	}
 
 	dispose() {
+		if (this.aabbHelper) {
+			this.aabbHelper.parent?.remove(this.aabbHelper);
+			this.aabbHelper.geometry.dispose();
+			(this.aabbHelper.material as THREE.Material).dispose();
+		}
 		this.starVisualizer.mesh.parent?.remove(this.starVisualizer.mesh);
 		this.planetVisualizer.dispose();
 	}
