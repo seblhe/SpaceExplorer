@@ -96,7 +96,8 @@ export function generatePlanet({
 	const orbitSpeed = lerp(0.00002, 0.00012, local());
 	const orbitPhase = local() * Math.PI * 2;
 	const orbitEccentricity = lerp(0.0, 0.4, local());
-	const orbitInclination = lerp(0, Math.PI / 8, local());
+	const orbitInclination = lerp(0, Math.PI / 6, local()); // Un peu plus d'inclinaison max (30 deg)
+	const orbitAscendingNode = local() * Math.PI * 2;
 
 	// ---- Rotation ----
 	const selfRotationSpeed = lerp(0.0005, 0.01, local());
@@ -165,6 +166,7 @@ export function generatePlanet({
 		orbitPhase,
 		orbitEccentricity,
 		orbitInclination,
+		orbitAscendingNode,
 		selfRotationSpeed,
 		selfTilt,
 		temperature,

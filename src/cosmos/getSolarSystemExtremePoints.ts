@@ -34,12 +34,22 @@ export function getSolarSystemExtremePoints(star: StarDescriptor, offset: THREE.
         // Points de l'orbite (échantillonnage)
         for (let t = 0; t < 120; t += 10) { // Optimisation: moins de points
             const theta = (t / 120) * Math.PI * 2 + phase;
-            const px = a * Math.cos(theta);
-            const pz = b * Math.sin(theta);
-            const py = Math.sin(incl) * pz * 0.1;
+            const x0 = a * Math.cos(theta);
+            const z0 = b * Math.sin(theta);
+            
+            // 1. Rotation autour de X (Inclinaison)
+            const y1 = z0 * Math.sin(incl);
+            const z1 = z0 * Math.cos(incl);
+            const x1 = x0;
+
+            // 2. Rotation autour de Y (Noeud ascendant)
+            const omega = planet.orbitAscendingNode ?? 0;
+            const x2 = x1 * Math.cos(omega) + z1 * Math.sin(omega);
+            const y2 = y1;
+            const z2 = -x1 * Math.sin(omega) + z1 * Math.cos(omega);
             
             // Position monde de la planète sur son orbite
-            const planetPos = starPos.clone().add(new THREE.Vector3(px, py, pz).multiplyScalar(0.05));
+            const planetPos = starPos.clone().add(new THREE.Vector3(x2, y2, z2).multiplyScalar(0.05));
             
             points.push(planetPos.clone());
             
@@ -62,7 +72,19 @@ export function getSolarSystemExtremePoints(star: StarDescriptor, offset: THREE.
                     const mx = ma * Math.cos(mtheta);
                     const mz = ma * Math.sin(mtheta);
                     
-                    const moonPos = planetPos.clone().add(new THREE.Vector3(mx, 0, mz).multiplyScalar(0.05));
+                    // Appliquer l'inclinaison (selfTilt) comme dans PlanetVisualizer
+                    const tilt = planet.selfTilt ?? 0;
+                    // Rotation autour de Z (comme translationGroup.rotation.z = tilt)
+                    // Le plan orbital des lunes est initialement XZ (y=0)
+                    // x' = x*cos(t) - y*sin(t) -> x*cos(t)
+                    // y' = x*sin(t) + y*cos(t) -> x*sin(t)
+                    // z' = z
+                    const rx = mx * Math.cos(tilt);
+                    const ry = mx * Math.sin(tilt);
+                    const rz = mz;
+
+                    // On n'utilise pas de facteur 0.05 ici pour être cohérent avec le visuel
+                    const moonPos = planetPos.clone().add(new THREE.Vector3(rx, ry, rz));
                     points.push(moonPos);
                 }
             }

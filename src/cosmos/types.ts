@@ -44,6 +44,7 @@ export interface PlanetDescriptor {
 	orbitPhase?: number;         // phase initiale dans l'orbite (radians)
 	orbitEccentricity?: number;  // excentricité (0=cercle, 0.1..0.6=ellipse)
 	orbitInclination?: number;   // inclinaison orbitale en degrés
+	orbitAscendingNode?: number; // longitude du noeud ascendant (radians)
 	selfRotationSpeed?: number;  // vitesse de rotation sur elle-même (rad/s ou unité que tu utilises)
 	selfTilt?: number;           // inclinaison de l’axe de rotation (degrés)
 	type: 'rocky' | 'gaseous' | 'icy' | 'volcanic' | 'habitable' | 'barren';

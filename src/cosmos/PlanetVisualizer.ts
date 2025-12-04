@@ -131,10 +131,23 @@ export class PlanetVisualizer {
 
 		// Ligne d’orbite inclinée
 		const orbitPoints = orbitCurve.getPoints(120).map(pt => {
-			const px = pt.x;
-			const pz = pt.y;
-			const py = Math.sin(incl) * pz * 0.1; // inclinaison réelle
-			return new THREE.Vector3(px, py, pz);
+			const x0 = pt.x;
+			const z0 = pt.y;
+			
+			// 1. Rotation autour de X (Inclinaison)
+			// y1 = z0 * sin(incl)
+			// z1 = z0 * cos(incl)
+			const y1 = z0 * Math.sin(incl);
+			const z1 = z0 * Math.cos(incl);
+			const x1 = x0;
+
+			// 2. Rotation autour de Y (Noeud ascendant)
+			const omega = p.orbitAscendingNode ?? 0;
+			const x2 = x1 * Math.cos(omega) + z1 * Math.sin(omega);
+			const y2 = y1;
+			const z2 = -x1 * Math.sin(omega) + z1 * Math.cos(omega);
+
+			return new THREE.Vector3(x2, y2, z2);
 		});
 		const orbitGeom = new THREE.BufferGeometry().setFromPoints(orbitPoints);
 		const orbitMat = new THREE.LineBasicMaterial({ color: 0xaaaaaa, opacity: 0.6, transparent: true });
@@ -143,6 +156,11 @@ export class PlanetVisualizer {
 
 		// Groupe de translation
 		const translationGroup = new THREE.Group();
+		// Appliquer l'inclinaison axiale de la planète (selfTilt)
+		// Cela incline tout le système planétaire (planète + lunes)
+		if (p.selfTilt) {
+			translationGroup.rotation.z = p.selfTilt;
+		}
 		translationGroup.add(mesh);
 
 		// Orbites des lunes
@@ -224,11 +242,21 @@ export class PlanetVisualizer {
 			const angle = (elapsedTime * (p.orbitSpeed ?? 0.0001) * 0.1) + (p.orbitPhase ?? 0);
 
 			// Orbite elliptique centrée sur le soleil
-			const x = a * Math.cos(angle);
-			const z = b * Math.sin(angle);
-			// Inclinaison réelle : la planète doit suivre l'orbite incliné
-			const y = Math.sin(incl) * z * 0.1;
-			planetObj.mesh.position.set(x, y, z);
+			const x0 = a * Math.cos(angle);
+			const z0 = b * Math.sin(angle);
+			
+			// 1. Rotation autour de X (Inclinaison)
+			const y1 = z0 * Math.sin(incl);
+			const z1 = z0 * Math.cos(incl);
+			const x1 = x0;
+
+			// 2. Rotation autour de Y (Noeud ascendant)
+			const omega = p.orbitAscendingNode ?? 0;
+			const x2 = x1 * Math.cos(omega) + z1 * Math.sin(omega);
+			const y2 = y1;
+			const z2 = -x1 * Math.sin(omega) + z1 * Math.cos(omega);
+
+			planetObj.mesh.position.set(x2, y2, z2);
 
 			// Met à jour la position du soleil dans le shader
 			if (sunPosition) {
