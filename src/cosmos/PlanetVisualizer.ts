@@ -163,6 +163,40 @@ export class PlanetVisualizer {
 		}
 		translationGroup.add(mesh);
 
+		// Anneaux
+		if (p.rings && p.rings.length > 0) {
+			p.rings.forEach(ring => {
+				const inner = radiusScale * ring.innerRadius;
+				const outer = radiusScale * ring.outerRadius;
+				const ringGeom = new THREE.RingGeometry(inner, outer, 64);
+				
+				// Orienter l'anneau sur le plan XZ (par défaut RingGeometry est XY)
+				const posAttribute = ringGeom.attributes.position;
+				for ( let i = 0; i < posAttribute.count; i ++ ) {
+					const x = posAttribute.getX( i );
+					const y = posAttribute.getY( i );
+					// x -> x, y -> z, z -> y (0)
+					posAttribute.setXYZ( i, x, 0, y );
+				}
+				// Recalculer les normales pour qu'elles pointent vers Y
+				ringGeom.computeVertexNormals();
+
+				const ringMat = new THREE.MeshStandardMaterial({
+					color: ring.color,
+					side: THREE.DoubleSide,
+					transparent: true,
+					opacity: ring.opacity,
+					roughness: 0.8,
+					metalness: 0.2
+				});
+				
+				const ringMesh = new THREE.Mesh(ringGeom, ringMat);
+				ringMesh.receiveShadow = true;
+				ringMesh.castShadow = true;
+				translationGroup.add(ringMesh);
+			});
+		}
+
 		// Orbites des lunes
 		const moonOrbitLines: THREE.Line[] = [];
 		(p.moons ?? []).forEach(moon => {

@@ -31,6 +31,17 @@ export interface MoonDescriptor {
 }
 
 /** ---------------------
+ *  ANNEAUX
+ *  -------------------- */
+export interface RingDescriptor {
+	innerRadius: number; // Multiplicateur du rayon de la planète (ex: 1.2)
+	outerRadius: number; // Multiplicateur du rayon de la planète (ex: 2.0)
+	type: 'dust' | 'rock' | 'ice';
+	color: string;
+	opacity: number;
+}
+
+/** ---------------------
  *  PLANÈTES
  *  -------------------- */
 export interface PlanetDescriptor {
@@ -48,6 +59,7 @@ export interface PlanetDescriptor {
 	selfRotationSpeed?: number;  // vitesse de rotation sur elle-même (rad/s ou unité que tu utilises)
 	selfTilt?: number;           // inclinaison de l’axe de rotation (degrés)
 	type: 'rocky' | 'gaseous' | 'icy' | 'volcanic' | 'habitable' | 'barren';
+	rings?: RingDescriptor[];
 	radiusKm?: number;
 	gravityG?: number;
 	atmosphere?: 'none' | 'thin' | 'breathable' | 'toxic' | 'dense';

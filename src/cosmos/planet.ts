@@ -63,12 +63,47 @@ export function generatePlanet({
 		return Math.min(1, Number(score.toFixed(2)));
 	})();
 
+	// ---- Anneaux ----
+	const rings: any[] = [];
+	let hasRings = false;
+	const ringChance = type === 'gaseous' ? 0.8 : type === 'icy' ? 0.4 : type === 'rocky' ? 0.1 : 0.05;
+	
+	if (local() < ringChance) {
+		hasRings = true;
+		const numRings = Math.floor(local() * 3) + 1;
+		let currentRingInner = 1.4; // Commence un peu après la surface
+		
+		for (let r = 0; r < numRings; r++) {
+			const width = 0.2 + local() * 0.8;
+			const gap = 0.1 + local() * 0.2;
+			const outer = currentRingInner + width;
+			
+			const ringType = type === 'gaseous' || type === 'icy' ? 'ice' : 'rock';
+			const ringColor = ringType === 'ice' ? '#aaddff' : '#887766';
+			
+			rings.push({
+				innerRadius: currentRingInner,
+				outerRadius: outer,
+				type: ringType,
+				color: ringColor,
+				opacity: 0.7 + local() * 0.3
+			});
+			
+			currentRingInner = outer + gap;
+		}
+	}
+
 	// ---- Lunes ----
 	const numMoons = Math.max(0, Math.floor(local() * (type === 'gaseous' ? 10 : 4)));
 	const moons:any = [];
 	
 	// Gestion de l'espacement des lunes pour éviter les collisions
-	let currentOrbitDist = 2; // Distance minimale de départ
+	// Si anneaux, on pousse les lunes plus loin
+	// Le dernier anneau finit à 'currentRingInner - gap' (approximativement)
+	// On convertit l'échelle des anneaux (multiplicateur de rayon) en échelle de distance de lune
+	// Approximation : Distance Lune ~= (RayonPlanète * Multiplicateur) / 5 (très approximatif, voir PlanetVisualizer)
+	// Pour être sûr, on ajoute une bonne marge si anneaux.
+	let currentOrbitDist = hasRings ? (rings[rings.length-1].outerRadius * 10) + 5 : 2; 
 
 	for (let m = 0; m < numMoons; m++) {
 		const mSeed = (Math.floor(local() * 1e9) ^ (seed + m * 13)) >>> 0;
@@ -171,6 +206,7 @@ export function generatePlanet({
 		selfTilt,
 		temperature,
 		biome,
+		rings,
 		structures,
 		tags
 	} as PlanetDescriptor;

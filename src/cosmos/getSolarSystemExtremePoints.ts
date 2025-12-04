@@ -61,6 +61,26 @@ export function getSolarSystemExtremePoints(star: StarDescriptor, offset: THREE.
             points.push(planetPos.clone().add(new THREE.Vector3(0, 0, planetVisualSize)));
             points.push(planetPos.clone().add(new THREE.Vector3(0, 0, -planetVisualSize)));
 
+            // Anneaux
+            if (planet.rings && planet.rings.length > 0) {
+                const maxRingRadius = Math.max(...planet.rings.map(r => r.outerRadius));
+                const ringVisualRadius = radiusScale * maxRingRadius;
+                
+                // Ajouter des points extrêmes pour les anneaux (cercle dans le plan incliné)
+                const tilt = planet.selfTilt ?? 0;
+                for (let ang = 0; ang < Math.PI * 2; ang += Math.PI / 2) {
+                    const rx = ringVisualRadius * Math.cos(ang);
+                    const rz = ringVisualRadius * Math.sin(ang);
+                    
+                    // Rotation tilt (autour de Z)
+                    const tx = rx * Math.cos(tilt);
+                    const ty = rx * Math.sin(tilt);
+                    const tz = rz;
+                    
+                    points.push(planetPos.clone().add(new THREE.Vector3(tx, ty, tz)));
+                }
+            }
+
             // Lunes
             for (const moon of planet.moons ?? []) {
                 // Distance visuelle adaptée (doit matcher PlanetVisualizer)
