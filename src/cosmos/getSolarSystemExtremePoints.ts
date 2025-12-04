@@ -53,7 +53,8 @@ export function getSolarSystemExtremePoints(star: StarDescriptor, offset: THREE.
 
             // Lunes
             for (const moon of planet.moons ?? []) {
-                const mDistance = moon.distance ?? (radiusScale * 2 + 100);
+                // Distance visuelle adaptée (doit matcher PlanetVisualizer)
+                const mDistance = radiusScale * 1.5 + 10 + (moon.distance ?? 10) * 5;
                 const ma = mDistance;
                 // Orbite de la lune (cercle simple)
                 for (let mt = 0; mt < 36; mt += 6) {

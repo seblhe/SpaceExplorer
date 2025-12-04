@@ -41,7 +41,8 @@ export class PlanetVisualizer {
 			const planet = this.createPlanetMesh(planetWithIndex);
 			this.group.add(planet.mesh);
 			this.group.add(planet.orbitLine);
-			planet.moons.forEach(m => this.group.add(m));
+			// Les lunes sont déjà ajoutées au groupe de la planète (planet.mesh)
+			// planet.moons.forEach(m => this.group.add(m));
 
 			this.planets.push(planet);
 			if (opts.showOrbits) {
@@ -126,6 +127,7 @@ export class PlanetVisualizer {
 		const mesh = new THREE.Mesh(geom, mat);
 		mesh.position.set(0, 0, 0);
 		mesh.receiveShadow = true;
+		mesh.castShadow = true;
 
 		// Ligne d’orbite inclinée
 		const orbitPoints = orbitCurve.getPoints(120).map(pt => {
@@ -146,7 +148,9 @@ export class PlanetVisualizer {
 		// Orbites des lunes
 		const moonOrbitLines: THREE.Line[] = [];
 		(p.moons ?? []).forEach(moon => {
-			const mDistance = moon.distance ?? (radiusScale * 2 + 100);
+			// Distance visuelle adaptée : Rayon planète + Marge + Distance lune amplifiée
+			const mDistance = radiusScale * 1.5 + 10 + (moon.distance ?? 10) * 5;
+			
 			const mCurve = new THREE.EllipseCurve(0, 0, mDistance, mDistance, 0, Math.PI * 2, false, 0);
 			const mPoints = mCurve.getPoints(64).map(pt => new THREE.Vector3(pt.x, 0, pt.y));
 			const mGeom = new THREE.BufferGeometry().setFromPoints(mPoints);
@@ -159,10 +163,37 @@ export class PlanetVisualizer {
 
 		// Lunes (meshes)
 		const moons: THREE.Mesh[] = [];
+		const moonTextureLoader = new THREE.TextureLoader();
 		(p.moons ?? []).forEach((moon) => {
-			const mGeom = new THREE.SphereGeometry(moon.size * 0.5, 16, 16);
-			const mMat = new THREE.MeshStandardMaterial({ color: moon.color ?? 0x999999, roughness: 0.9 });
+			// Taille visuelle augmentée pour être visible
+			const mVisualSize = Math.max(moon.size * 5, 1.5);
+			const mGeom = new THREE.SphereGeometry(mVisualSize, 16, 16);
+			
+			const mMat = new THREE.MeshStandardMaterial({ 
+				color: 0xffffff, 
+				roughness: 0.8,
+				metalness: 0.1
+			});
+
+			// Chargement de la texture
+			const texturePath = `/textures/moon/moon_${moon.kind}.png`;
+			moonTextureLoader.load(
+				texturePath,
+				(tex) => {
+					mMat.map = tex;
+					mMat.needsUpdate = true;
+				},
+				undefined,
+				(err) => {
+					// Fallback couleur si pas de texture
+					mMat.color.set(moon.color ?? 0x999999);
+				}
+			);
+
 			const mMesh = new THREE.Mesh(mGeom, mMat);
+			mMesh.castShadow = true;
+			mMesh.receiveShadow = true;
+			translationGroup.add(mMesh); // Ajout au groupe de la planète
 			moons.push(mMesh);
 		});
 
@@ -216,7 +247,9 @@ export class PlanetVisualizer {
 
 			(p.moons ?? []).forEach((moon, mi) => {
 				const mMesh = planetObj.moons[mi];
-				const mDistance = moon.distance ?? (radiusScale * 2 + 100);
+				// Distance visuelle adaptée (doit matcher la création)
+				const mDistance = radiusScale * 1.5 + 10 + (moon.distance ?? 10) * 5;
+				
 				// Ralentir la vitesse orbitale des lunes
 				const mAngle = (elapsedTime * (moon.orbitSpeed ?? 0.001) * 0.5) + (moon.orbitPhase ?? 0);
 				// Position relative au groupe de translation (qui est déjà à la position de la planète)

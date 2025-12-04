@@ -25,14 +25,18 @@ export function generateMoon({
   const size = Math.max(0.1, radiusKm / 1000);
 
   // Type de lune
-  const kind = pick(rng, ['asteroid', 'rocky', 'icy', 'small']);
+  // Correspondance avec les textures disponibles dans public/textures/moon/
+  const kind = pick(rng, ['asteroid', 'rocky', 'icy', 'barren', 'volcanic', 'desert', 'ice']);
 
   // Couleur indicative selon le type
-  const colorMap: Record<typeof kind, string> = {
+  const colorMap: Record<string, string> = {
     asteroid: '#888888',
     rocky: '#a0704b',
     icy: '#c9e8ff',
-    small: '#bbbbbb'
+    barren: '#bbbbbb',
+    volcanic: '#ff4400',
+    desert: '#eebb88',
+    ice: '#ffffff'
   };
   const color = colorMap[kind] ?? '#aaaaaa';
 

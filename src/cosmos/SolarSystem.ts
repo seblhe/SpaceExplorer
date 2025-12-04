@@ -29,9 +29,18 @@ export class SolarSystem {
 		//opts.scene.add(this.starVisualizer.mesh);
 
 		// ---- Lumière du soleil ----
-		const starLight = new THREE.PointLight(0xffffff, 2, 0); // lumière infinie
+		// Decay = 0 pour que la lumière atteigne les planètes lointaines sans atténuation physique excessive
+		const starLight = new THREE.PointLight(0xffffff, 1.5, 0, 0); 
 		starLight.position.copy(descriptor.star.position);
 		starLight.castShadow = true;
+		
+		// Configuration des ombres pour les éclipses
+		starLight.shadow.mapSize.width = 2048;
+		starLight.shadow.mapSize.height = 2048;
+		starLight.shadow.camera.near = 1;
+		starLight.shadow.camera.far = 20000; // Couvre tout le système largement
+		starLight.shadow.bias = -0.00005; // Réduit pour éviter les artefacts (peter panning)
+		
 		opts.scene.add(starLight);
 
 		// ---- Planètes et lunes ----

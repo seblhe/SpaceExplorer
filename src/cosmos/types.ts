@@ -22,7 +22,7 @@ export interface MoonDescriptor {
 	color?: string;               // couleur visuelle
 	orbitSpeed?: number;          // vitesse angulaire orbitale
 	orbitPhase?: number;         // phase initiale dans l'orbite (radians)
-	kind: 'asteroid' | 'rocky' | 'icy' | 'small';
+	kind: 'asteroid' | 'rocky' | 'icy' | 'desert' | 'gaseous' | 'oceanic' | 'forest' | 'lava' | 'ice' | 'mixed' | 'habitable' | 'barren' | 'volcanic';
 	radiusKm: number;
 	resources: {
 		metals: number;

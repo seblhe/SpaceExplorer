@@ -66,11 +66,26 @@ export function generatePlanet({
 	// ---- Lunes ----
 	const numMoons = Math.max(0, Math.floor(local() * (type === 'gaseous' ? 10 : 4)));
 	const moons:any = [];
-	//TODO : remoce comments for moons
-	/*for (let m = 0; m < numMoons; m++) {
+	
+	// Gestion de l'espacement des lunes pour éviter les collisions
+	let currentOrbitDist = 2; // Distance minimale de départ
+
+	for (let m = 0; m < numMoons; m++) {
 		const mSeed = (Math.floor(local() * 1e9) ^ (seed + m * 13)) >>> 0;
-		moons.push(generateMoon({ seed: mSeed, index: m, rng: mulberry32(mSeed) }));
-	}*/
+		const mRng = mulberry32(mSeed);
+		const moon = generateMoon({ seed: mSeed, index: m, rng: mRng });
+		
+		// Calcul d'un espacement sûr :
+		// - Une base fixe (2.0)
+		// - Une variation aléatoire (0..3.0)
+		// - La taille de la lune (pour éviter qu'une grosse lune n'écrase une autre)
+		const spacing = 2.0 + mRng() * 3.0 + (moon.size * 2);
+		currentOrbitDist += spacing;
+		
+		moon.distance = currentOrbitDist;
+		
+		moons.push(moon);
+	}
 
 	// ---- Caractéristiques orbitales ----
 	const distance = lerp(
