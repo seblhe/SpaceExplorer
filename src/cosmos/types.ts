@@ -134,6 +134,108 @@ export interface StructureDescriptor {
 }
 
 /** ---------------------
+ *  VAISSEAU
+ *  -------------------- */
+export type ShipType = 'explorer' | 'hauler' | 'fighter' | 'shuttle' | 'mining';
+
+export interface ShipStats {
+	// Mouvement
+	maxSpeed: number;        // Unités par seconde
+	acceleration: number;    // Unités par seconde²
+	turnRate: number;        // Radians par seconde (maniabilité)
+	jumpRange: number;       // Distance max d'un saut hyperespace
+
+	// Capacités
+	cargoVolume: number;     // m³
+	cargoWeight: number;     // Tonnes
+	crewCapacity: number;    // Nombre de personnes
+	
+	// Energie & Survie
+	fuelCapacity: number;    // Unités de fuel
+	fuelConsumption: number; // Unités par seconde en poussée max
+	energyStorage: number;   // Batterie pour les systèmes (boucliers, lasers)
+	energyRegen: number;     // Recharge par seconde
+	
+	// Défense
+	hullIntegrity: number;   // Points de structure (HP)
+	shieldCapacity: number;  // Points de bouclier
+	shieldRegen: number;     // Recharge bouclier par seconde
+	
+	// Exploration
+	sensorRange: number;     // Rayon de détection des objets
+	scanSpeed: number;       // Vitesse d'analyse des planètes
+}
+
+export interface SpaceshipDescriptor {
+	id: string;
+	name: string;
+	type: ShipType;
+    designClass: 'atmospheric' | 'industrial'; // Aerodynamique vs Deep Space
+	stats: ShipStats;
+	
+	// État courant
+	state: {
+		position: { x: number; y: number; z: number };
+		rotation: { x: number; y: number; z: number; w: number }; // Quaternion
+		velocity: { x: number; y: number; z: number };
+		fuelCurrent: number;
+		energyCurrent: number;
+		hullCurrent: number;
+		shieldCurrent: number;
+	};
+
+	// Équipement
+	modules: ShipModule[];       // Modules installés
+	cargo: string[];         // IDs des items en soute
+}
+
+/** ---------------------
+ *  MODULES DE VAISSEAU
+ *  -------------------- */
+export interface ShipModule {
+	id: string;
+	name: string;
+	type: 'engine' | 'shield' | 'weapon' | 'scanner' | 'cargo' | 'reactor' | 'habitation' | 'science' | 'maintenance' | 'hyperdrive' | 'stealth' | 'utility' | 'hangar';
+	description: string;
+	mass: number; // Tonnes
+	powerDraw: number; // Consommation d'énergie par seconde (- pour production)
+	
+	// Propriétés spécifiques aux moteurs
+	thrust?: number; // Force de poussée
+	fuelEfficiency?: number; // Consommation de fuel par unité de poussée
+	maxSpeedBonus?: number;
+    jumpEfficiency?: number; // Réduction du coût en fuel des sauts (0.0 - 1.0)
+
+	// Propriétés Habitation & Survie
+	crewSlots?: number; // Nombre de lits/places
+	comfort?: number;   // Bonus de moral (0-100)
+	healthRegen?: number; // Soin par seconde (Infirmerie)
+
+	// Propriétés Science & Maintenance
+	scienceBonus?: number; // Multiplicateur de vitesse de scan ou récompense
+	repairRate?: number;   // Points de coque réparés par seconde
+    automationBonus?: number; // Bonus global d'efficacité (IA)
+
+	// Propriétés Combat & Défense
+	shieldBonus?: number; // Points de bouclier max ajoutés
+	shieldRegen?: number; // Points de bouclier régénérés par seconde
+	weaponDamage?: number; // Dégâts par tir
+    stealthFactor?: number; // Réduction de la distance de détection ennemie (0-100%)
+
+	// Propriétés Soute & Minage
+	cargoCapacity?: number; // Volume de soute ajouté
+	miningSpeed?: number; // Vitesse de minage
+    tractorPower?: number; // Force du rayon tracteur
+
+    // Propriétés Hangar
+    hangarSlots?: number; // Nombre de vaisseaux stockables
+
+	// Propriétés Capteurs
+	sensorRange?: number; // Portée de détection
+	scanSpeed?: number; // Vitesse de scan
+}
+
+/** ---------------------
  *  GALAXIE
  *  -------------------- */
 export interface GalaxyDescriptor {

@@ -125,12 +125,30 @@ body {
     overflow-y: auto;
 }
 
+.bottom-right {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    width: 300px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.bottom-center {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 300px;
+}
+
 .right-panel {
     position: absolute;
     top: 20px;
     right: 20px;
     width: 320px;
-    bottom: 20px;
+    max-height: 45%;
+    overflow-y: auto;
     /* Prend toute la hauteur à droite */
     display: flex;
     flex-direction: column;
@@ -212,6 +230,24 @@ body {
 }
 
 
+/* --- SHIP HUD BARS --- */
+
+#hud-ship-fuel-bar {
+    background: #ffcc00;
+    box-shadow: 0 0 5px #ffcc00;
+}
+
+#hud-ship-hull-bar {
+    background: #ff4444;
+    box-shadow: 0 0 5px #ff4444;
+}
+
+#hud-ship-shield-bar {
+    background: #00aaff;
+    box-shadow: 0 0 5px #00aaff;
+}
+
+
 /* --- SEED --- */
 
 #seed-container {
@@ -222,4 +258,39 @@ body {
     color: #444;
     pointer-events: none;
     z-index: 200;
+}
+
+
+/* --- MODULE LIST --- */
+
+.module-list {
+    margin-top: 5px;
+    max-height: 120px;
+    overflow-y: auto;
+    font-size: 0.8em;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.module-item {
+    padding: 4px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.module-header {
+    display: flex;
+    justify-content: space-between;
+    color: #ccddee;
+    font-weight: bold;
+}
+
+.module-type {
+    color: #6699cc;
+    font-size: 0.9em;
+    text-transform: uppercase;
+}
+
+.module-stats {
+    color: #88aa88;
+    font-size: 0.9em;
+    margin-top: 2px;
 }

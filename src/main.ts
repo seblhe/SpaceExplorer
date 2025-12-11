@@ -9,6 +9,7 @@ import { generateStar } from './cosmos/star';
 import { SolarSystem } from './cosmos/SolarSystem';
 import { mulberry32 } from './cosmos/prng';
 import { getSolarSystemExtremePoints } from './cosmos/getSolarSystemExtremePoints';
+import { Spaceship } from './Spaceship';
 
 // Flags de debug
 const SHOW_GALAXY_AABB = false;
@@ -41,8 +42,22 @@ const hudNoTarget = document.getElementById('hud-no-target') as HTMLElement;
 const resMetalBar = document.getElementById('res-metal-bar') as HTMLElement;
 const resGasBar = document.getElementById('res-gas-bar') as HTMLElement;
 
+const hudShipSpeed = document.getElementById('hud-ship-speed') as HTMLElement;
+const hudShipFuelText = document.getElementById('hud-ship-fuel-text') as HTMLElement;
+const hudShipFuelBar = document.getElementById('hud-ship-fuel-bar') as HTMLElement;
+const hudShipHullText = document.getElementById('hud-ship-hull-text') as HTMLElement;
+const hudShipHullBar = document.getElementById('hud-ship-hull-bar') as HTMLElement;
+const hudShipShieldText = document.getElementById('hud-ship-shield-text') as HTMLElement;
+const hudShipShieldBar = document.getElementById('hud-ship-shield-bar') as HTMLElement;
+const hudShipCrew = document.getElementById('hud-ship-crew') as HTMLElement;
+const hudShipCargo = document.getElementById('hud-ship-cargo') as HTMLElement;
+const hudShipModules = document.getElementById('hud-ship-modules') as HTMLElement;
+
 // --- Renderer ---
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+const renderer = new THREE.WebGLRenderer({ 
+	antialias: true, 
+	logarithmicDepthBuffer: true 
+});
 renderer.setPixelRatio(window.devicePixelRatio ?? 1);
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -52,13 +67,20 @@ container.appendChild(renderer.domElement);
 
 // --- Scene & Camera ---
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1e9);
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.001, 1e9);
 camera.position.set(0, 2000, 5000);
+
+// --- Spaceship ---
+// On place le vaisseau devant la caméra initiale
+const playerShip = new Spaceship(scene, new THREE.Vector3(0, 2000, 4800));
+// On l'oriente pour qu'il regarde vers la galaxie (0,0,0)
+playerShip.mesh.lookAt(0, 0, 0);
 
 // --- Controls ---
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
+(controls as any).enabled = false; // Désactivé pour le mode pilotage
 
 // --- Universe ---
 const universe = new Universe({ seed: Math.floor(Math.random() * 1e9), sizeRange: [40000, 200000] });
@@ -255,8 +277,31 @@ const range = 1;
 	}
 	// Positionner la caméra près de la première galaxie
 	if (firstGalaxyOffset) {
-		camera.position.copy(firstGalaxyOffset.clone().add(new THREE.Vector3(0, 0, 2.5 * (galaxyLODs[0].galaxyDescriptor.size * aabbScale))));
-		controls.target.copy(firstGalaxyOffset);
+		// Position beaucoup plus proche (0.5 au lieu de 2.0)
+		const startPos = firstGalaxyOffset.clone().add(new THREE.Vector3(0, 0, 0.5 * (galaxyLODs[0].galaxyDescriptor.size * aabbScale)));
+		
+		// Placer le vaisseau
+		playerShip.mesh.position.copy(startPos);
+		playerShip.mesh.lookAt(firstGalaxyOffset);
+		
+		// Initialiser l'affichage des modules
+		renderShipModules(playerShip);
+
+		// Placer la caméra juste derrière le vaisseau
+		// Le vaisseau regarde vers -Z (local) qui est vers la galaxie
+		// Donc on place la caméra en +Z (local) par rapport au vaisseau
+		const camOffset = new THREE.Vector3(0, 5, 20);
+		// On positionne la caméra relative au vaisseau (qui est aligné avec l'axe Z du monde pour l'instant car lookAt(0,0,-dist))
+		// Note: lookAt oriente le -Z de l'objet vers la cible.
+		// Ici la cible est en (0,0,0) (relativement au vaisseau si on considère l'axe Z).
+		// Bref, startPos est en +Z par rapport à la galaxie.
+		// Donc le vecteur (Galaxy -> Ship) est +Z.
+		// Le vaisseau regarde la galaxie, donc son "avant" est vers -Z world.
+		// Son "arrière" est vers +Z world.
+		// Donc on ajoute du +Z à la position du vaisseau pour mettre la caméra derrière.
+		
+		camera.position.copy(startPos).add(camOffset);
+		controls.target.copy(playerShip.mesh.position);
 		controls.update();
 	}
 	// Affichage des AABB des systèmes solaires de la première galaxie
@@ -330,35 +375,19 @@ container.addEventListener('click', (event) => {
         if (planetIntersects.length > 0) {
             const target = planetIntersects[0].object;
             const targetPos = target.getWorldPosition(new THREE.Vector3());
-            
-            smoothCameraMove(targetPos);
-            console.log("🪐 Planète sélectionnée :", target.name ?? "inconnue");
-			   // Trouver la planète sélectionnée (mesh ou enfant)
-			   const planetObj = solar.planetVisualizer.planets.find(p => p.mesh === target || p.mesh.children.includes(target));
-			   if (planetObj) {
-				   displayPlanetInfo(planetObj.descriptor);
-			   }
-            return; // ← évite de traiter le clic comme un clic sur une étoile
-        }
-    }
-	// 🔍 Détection des planètes si un système est actif
-    if (currentSolarSystem) {
-		const solar = currentSolarSystem as SolarSystem;
-
-        const planetMeshes: THREE.Object3D[] = solar.planetVisualizer.planets.map(p => p.mesh);
-        const planetIntersects = raycaster.intersectObjects(planetMeshes, true);
-
-        if (planetIntersects.length > 0) {
-            const target = planetIntersects[0].object;
-            const targetPos = target.getWorldPosition(new THREE.Vector3());
             const distance = camera.position.distanceTo(targetPos);
 
             if (distanceDisplay) {
                 distanceDisplay.textContent = `🪐 Distance à la planète : ${distance.toFixed(2)} unités`;
             }
 
-            smoothCameraMove(targetPos);
             console.log("🪐 Planète sélectionnée :", target.name ?? "inconnue");
+			
+			// Trouver la planète sélectionnée (mesh ou enfant)
+			const planetObj = solar.planetVisualizer.planets.find(p => p.mesh === target || p.mesh.children.includes(target));
+			if (planetObj) {
+				displayPlanetInfo(planetObj.descriptor);
+			}
             return; // ← évite de traiter le clic comme un clic sur une étoile
         }
     }
@@ -386,9 +415,6 @@ container.addEventListener('click', (event) => {
 		if (distanceDisplay) {
 			distanceDisplay.textContent = `📏 Distance à la caméra : ${distance.toFixed(2)} unités`;
 		}
-
-		//moveCameraTo(targetPos);
-		smoothCameraMove(targetPos);
 
 		// Récupérer l’étoile sélectionnée
 		const selectedStar = galaxyLODs.flatMap(lod => Array.from(lod.starVisualizers.values()))
@@ -469,6 +495,8 @@ function clearPlanetInfo() {
 
 // --- Lighting ---
 scene.add(new THREE.AmbientLight(0xffffff, 0.1));
+scene.add(new THREE.HemisphereLight(0xffffbb, 0x080820, 0.3)); // Lumière globale douce pour voir le vaisseau
+
 
 function createSolarSystemFromStarVisualizer(vis: StarVisualizerCinematic): SolarSystem | null {
 	console.log('🧪 Star descriptor:', vis.descriptor);
@@ -511,6 +539,7 @@ let lastHudUpdate = 0;
 
 function animate() {
 	requestAnimationFrame(animate);
+	const delta = clock.getDelta();
 	const t = clock.getElapsedTime();
 	controls.update();
 	
@@ -527,6 +556,32 @@ function animate() {
 	if (currentSolarSystem) {
 		currentSolarSystem.update(t, camera.position);
 	}
+	
+	// Update Spaceship & Camera
+	if (playerShip) {
+		playerShip.update(delta);
+		// Force la mise à jour de la matrice du vaisseau pour que la caméra suive la position ACTUELLE et non celle de la frame précédente
+		playerShip.mesh.updateMatrixWorld();
+		
+		updateShipHUD();
+
+		// Camera Follow (TPS)
+		// Offset défini dans l'espace local du vaisseau (avant mise à l'échelle)
+		const relativeOffset = new THREE.Vector3(0, 8, 40); 
+		const cameraOffset = relativeOffset.applyMatrix4(playerShip.mesh.matrixWorld);
+		
+		// Suivi immédiat
+		camera.position.lerp(cameraOffset, 1.0); 
+		
+		// Regarder loin devant le vaisseau
+		const lookAtPos = playerShip.mesh.position.clone().add(
+			new THREE.Vector3(0, 0, -100).applyQuaternion(playerShip.mesh.quaternion)
+		);
+		camera.lookAt(lookAtPos);
+	} else {
+		controls.update();
+	}
+
 	renderer.render(scene, camera);
 }
 animate();
@@ -602,8 +657,12 @@ function smoothCameraMove(target: THREE.Vector3, duration = 2) {
 	const endTarget = target.clone();
 
 	let elapsed = 0;
+	let lastTime = performance.now();
 	const animateMove = () => {
-		elapsed += clock.getDelta();
+		const now = performance.now();
+		const dt = (now - lastTime) / 1000;
+		lastTime = now;
+		elapsed += dt;
 		const t = Math.min(elapsed / duration, 1);
 
 		camera.position.lerpVectors(startPos, endPos, t);
@@ -613,5 +672,66 @@ function smoothCameraMove(target: THREE.Vector3, duration = 2) {
 		if (t < 1) requestAnimationFrame(animateMove);
 	};
 	animateMove();
+}
+
+function renderShipModules(ship: Spaceship) {
+	hudShipModules.innerHTML = '';
+	ship.descriptor.modules.forEach(mod => {
+		const div = document.createElement('div');
+		div.className = 'module-item';
+		
+		let stats = '';
+		if (mod.type === 'engine') stats = `Thrust: ${mod.thrust} | Eff: ${mod.fuelEfficiency}`;
+		else if (mod.type === 'reactor') stats = `Power: ${Math.abs(mod.powerDraw)}/s`;
+		else if (mod.type === 'habitation') stats = `Crew: +${mod.crewSlots || 0} | Comfort: ${mod.comfort || 0}`;
+		else if (mod.type === 'science') stats = `Sci Bonus: x${mod.scienceBonus}`;
+		else if (mod.type === 'maintenance') stats = `Repair: ${mod.repairRate}/s`;
+		
+		div.innerHTML = `
+			<div class="module-header">
+				<span>${mod.name}</span>
+				<span class="module-type">${mod.type}</span>
+			</div>
+			<div class="module-stats">${stats}</div>
+		`;
+		hudShipModules.appendChild(div);
+	});
+}
+
+function updateShipHUD() {
+	if (!playerShip) return;
+	
+	const state = playerShip.descriptor.state;
+	const stats = playerShip.descriptor.stats;
+	
+	// Vitesse (magnitude du vecteur vélocité)
+	const speed = Math.sqrt(state.velocity.x**2 + state.velocity.y**2 + state.velocity.z**2);
+	hudShipSpeed.textContent = speed.toFixed(0) + ' u/s';
+	
+	// Carburant
+	const fuelPct = Math.max(0, Math.min(100, (state.fuelCurrent / stats.fuelCapacity) * 100));
+	hudShipFuelText.textContent = fuelPct.toFixed(0) + '%';
+	hudShipFuelBar.style.width = fuelPct + '%';
+	hudShipFuelText.style.color = fuelPct < 20 ? '#ff4444' : '#fff';
+	
+	// Coque
+	const hullPct = Math.max(0, Math.min(100, (state.hullCurrent / stats.hullIntegrity) * 100));
+	hudShipHullText.textContent = hullPct.toFixed(0) + '%';
+	hudShipHullBar.style.width = hullPct + '%';
+	hudShipHullText.style.color = hullPct < 50 ? '#ffaa00' : '#fff';
+	
+	// Bouclier
+	const shieldPct = Math.max(0, Math.min(100, (state.shieldCurrent / stats.shieldCapacity) * 100));
+	hudShipShieldText.textContent = shieldPct.toFixed(0) + '%';
+	hudShipShieldBar.style.width = shieldPct + '%';
+
+	// Équipage
+	hudShipCrew.textContent = `${stats.crewCapacity} / ${stats.crewCapacity}`;
+
+	// Cargo
+	// On suppose que chaque item a un volume de 1 pour l'instant si pas défini, ou on compte juste le nombre d'items
+	// Mais le descriptor a cargo: any[]
+	const currentCargo = playerShip.descriptor.cargo.length; // Simplification
+	hudShipCargo.textContent = `${currentCargo} / ${stats.cargoVolume}`;
 }
 

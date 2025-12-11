@@ -37,6 +37,47 @@
             </div>
         </div>
 
+        <!-- BOTTOM CENTER: SHIP STATUS -->
+        <div class="hud-panel bottom-right">
+            <div class="panel-header">
+                <span class="icon">🚀</span> COCKPIT
+            </div>
+            <div class="panel-content">
+                <div class="data-row"><span class="label">VITESSE:</span> <span id="hud-ship-speed" class="value">0</span></div>
+
+                <div class="resource-bar">
+                    <div class="data-row"><span class="label">CARBURANT</span> <span id="hud-ship-fuel-text" class="value">100%</span></div>
+                    <div class="bar-container">
+                        <div id="hud-ship-fuel-bar" class="bar" style="width: 100%"></div>
+                    </div>
+                </div>
+
+                <div class="resource-bar">
+                    <div class="data-row"><span class="label">COQUE</span> <span id="hud-ship-hull-text" class="value">100%</span></div>
+                    <div class="bar-container">
+                        <div id="hud-ship-hull-bar" class="bar" style="width: 100%"></div>
+                    </div>
+                </div>
+
+                <div class="resource-bar">
+                    <div class="data-row"><span class="label">BOUCLIER</span> <span id="hud-ship-shield-text" class="value">100%</span></div>
+                    <div class="bar-container">
+                        <div id="hud-ship-shield-bar" class="bar" style="width: 100%"></div>
+                    </div>
+                </div>
+
+                <div class="separator"></div>
+                <div class="data-row"><span class="label">ÉQUIPAGE:</span> <span id="hud-ship-crew" class="value">--</span></div>
+                <div class="data-row"><span class="label">CARGO:</span> <span id="hud-ship-cargo" class="value">--</span></div>
+
+                <div class="separator"></div>
+                <div class="section-title">MODULES</div>
+                <div id="hud-ship-modules" class="module-list">
+                    <!-- Modules injected here -->
+                </div>
+            </div>
+        </div>
+
         <!-- RIGHT: CONTEXTUAL INFO (System / Planet) -->
         <div class="hud-panel right-panel">
             <div class="panel-header">
